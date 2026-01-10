@@ -104,6 +104,7 @@ class Agent:
         self._init_llm()
         self._init_registry()
         self._init_executor()
+        self._init_subagents()
         self._init_controller()
         self._init_commands()
         self._init_input(input_module)
@@ -160,13 +161,49 @@ class Agent:
             if tool:
                 self.executor.register_tool(tool)
 
+    def _init_subagents(self) -> None:
+        """Initialize sub-agent manager and register sub-agents."""
+        # Import here to avoid circular imports (subagent -> core/conversation -> core/__init__ -> agent)
+        from kohakuterrarium.builtins.subagents import get_builtin_subagent_config
+        from kohakuterrarium.modules.subagent import SubAgentManager
+
+        self.subagent_manager = SubAgentManager(
+            parent_registry=self.registry,
+            llm=self.llm,
+            agent_path=self.config.agent_path,
+        )
+
+        # Register sub-agents from config
+        for subagent_config in self.config.subagents:
+            if subagent_config.type == "builtin":
+                config = get_builtin_subagent_config(subagent_config.name)
+                if config:
+                    self.subagent_manager.register(config)
+                else:
+                    logger.warning(
+                        "Unknown builtin sub-agent", subagent_name=subagent_config.name
+                    )
+
+        if self.subagent_manager.list_subagents():
+            logger.info(
+                "Sub-agents registered",
+                subagents=self.subagent_manager.list_subagents(),
+            )
+
     def _init_controller(self) -> None:
         """Initialize controller."""
         # Build system prompt
         # Aggregator auto-adds: tool list (name + description), framework hints
         # system.md should only contain agent personality/guidelines
+        base_prompt = self.config.system_prompt
+
+        # Add sub-agents section if any registered
+        subagents_prompt = self.subagent_manager.get_subagents_prompt()
+        if subagents_prompt:
+            base_prompt = base_prompt + "\n\n" + subagents_prompt
+
         system_prompt = aggregate_system_prompt(
-            self.config.system_prompt,
+            base_prompt,
             self.registry,
             include_tools=True,
             include_hints=True,
@@ -297,6 +334,7 @@ class Agent:
         # Track running tool tasks (started during streaming)
         running_tasks: dict[str, asyncio.Task] = {}
         tool_job_ids: list[str] = []
+        subagent_job_ids: list[str] = []
 
         # Run controller and process output
         async for parse_event in self.controller.run_once():
@@ -308,6 +346,10 @@ class Agent:
                 logger.debug(
                     "Tool started async", tool_name=parse_event.name, job_id=job_id
                 )
+            elif isinstance(parse_event, SubAgentCallEvent):
+                # Handle sub-agent calls
+                job_id = await self._start_subagent_async(parse_event)
+                subagent_job_ids.append(job_id)
             else:
                 # Route other events (text, blocks, etc.)
                 await self.output_router.route(parse_event)
@@ -318,6 +360,10 @@ class Agent:
         # Wait for all direct tools to complete (parallel)
         if running_tasks:
             await self._wait_and_collect_results(tool_job_ids, running_tasks)
+
+        # Wait for sub-agents (they run until completion, then return to controller)
+        if subagent_job_ids:
+            await self._wait_and_collect_subagent_results(subagent_job_ids)
 
         # Handle pending commands
         commands = self.output_router.pending_commands
@@ -400,6 +446,73 @@ class Agent:
                 content=combined_content,
                 exit_code=0,
                 error=None,
+            )
+            await self._process_event(completion)
+
+    async def _start_subagent_async(self, event: SubAgentCallEvent) -> str:
+        """
+        Start a sub-agent execution.
+
+        Args:
+            event: Sub-agent call event from parser
+
+        Returns:
+            Job ID
+        """
+        logger.info(
+            "Starting sub-agent",
+            subagent_type=event.name,
+            task=event.args.get("task", "")[:50],
+        )
+        try:
+            job_id = await self.subagent_manager.spawn_from_event(event)
+            return job_id
+        except ValueError as e:
+            logger.error(
+                "Sub-agent not registered", subagent_name=event.name, error=str(e)
+            )
+            return f"error_{event.name}"
+
+    async def _wait_and_collect_subagent_results(
+        self,
+        job_ids: list[str],
+    ) -> None:
+        """
+        Wait for sub-agents to complete and send results to controller.
+
+        Args:
+            job_ids: List of sub-agent job IDs
+        """
+        if not job_ids:
+            return
+
+        logger.info("Waiting for sub-agents", count=len(job_ids))
+
+        result_strs: list[str] = []
+        for job_id in job_ids:
+            if job_id.startswith("error_"):
+                result_strs.append(f"## {job_id} - ERROR\nSub-agent not registered")
+                continue
+
+            result = await self.subagent_manager.wait_for(job_id)
+            if result:
+                if result.success:
+                    output = result.truncated(max_chars=2000)
+                    result_strs.append(
+                        f"## {job_id} - OK (turns={result.turns})\n{output}"
+                    )
+                else:
+                    result_strs.append(f"## {job_id} - ERROR\n{result.error}")
+            else:
+                result_strs.append(f"## {job_id} - TIMEOUT\nSub-agent did not complete")
+
+        # Send combined results back to controller
+        if result_strs:
+            combined_content = "\n\n".join(result_strs)
+            completion = TriggerEvent(
+                type="subagent_complete",
+                content=combined_content,
+                context={"job_ids": job_ids},
             )
             await self._process_event(completion)
 

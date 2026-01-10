@@ -53,6 +53,18 @@ class OutputConfig:
 
 
 @dataclass
+class SubAgentConfigItem:
+    """Configuration for a sub-agent."""
+
+    name: str
+    type: str = "builtin"  # builtin or custom
+    description: str | None = None
+    tools: list[str] = field(default_factory=list)
+    can_modify: bool = False
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class AgentConfig:
     """
     Complete configuration for an agent.
@@ -78,6 +90,7 @@ class AgentConfig:
     input: InputConfig = field(default_factory=InputConfig)
     triggers: list[TriggerConfig] = field(default_factory=list)
     tools: list[ToolConfigItem] = field(default_factory=list)
+    subagents: list[SubAgentConfigItem] = field(default_factory=list)
     output: OutputConfig = field(default_factory=OutputConfig)
 
     # Path to agent folder
@@ -201,6 +214,22 @@ def _parse_output_config(data: dict[str, Any] | None) -> OutputConfig:
     )
 
 
+def _parse_subagent_config(data: dict[str, Any]) -> SubAgentConfigItem:
+    """Parse sub-agent configuration."""
+    return SubAgentConfigItem(
+        name=data.get("name", ""),
+        type=data.get("type", "builtin"),
+        description=data.get("description"),
+        tools=data.get("tools", []),
+        can_modify=data.get("can_modify", False),
+        options={
+            k: v
+            for k, v in data.items()
+            if k not in ("name", "type", "description", "tools", "can_modify")
+        },
+    )
+
+
 def load_agent_config(agent_path: str | Path) -> AgentConfig:
     """
     Load agent configuration from folder.
@@ -258,6 +287,7 @@ def load_agent_config(agent_path: str | Path) -> AgentConfig:
         input=_parse_input_config(config_data.get("input")),
         triggers=[_parse_trigger_config(t) for t in config_data.get("triggers", [])],
         tools=[_parse_tool_config(t) for t in config_data.get("tools", [])],
+        subagents=[_parse_subagent_config(s) for s in config_data.get("subagents", [])],
         output=_parse_output_config(config_data.get("output")),
         agent_path=agent_path,
     )
