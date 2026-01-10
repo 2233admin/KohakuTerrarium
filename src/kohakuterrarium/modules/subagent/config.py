@@ -1,0 +1,148 @@
+"""
+Sub-agent configuration.
+
+Defines configuration for sub-agents including tool access, execution limits,
+and output routing.
+"""
+
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+
+class OutputTarget(Enum):
+    """Where sub-agent output goes."""
+
+    CONTROLLER = "controller"  # Return to parent controller (default)
+    EXTERNAL = "external"  # Stream directly to user/output
+
+
+@dataclass
+class SubAgentConfig:
+    """
+    Configuration for a sub-agent.
+
+    Attributes:
+        name: Sub-agent identifier
+        description: One-line description for controller
+        tools: List of allowed tool names
+        system_prompt: System prompt for the sub-agent
+        prompt_file: Path to system prompt file (relative to agent folder)
+        can_modify: Whether sub-agent can modify files
+        stateless: No persistent state between calls
+        interactive: Receives ongoing context updates from parent
+        output_to: Where output goes (controller or external)
+        output_module: Output module name (if output_to=external)
+        max_turns: Maximum conversation turns
+        timeout: Maximum execution time in seconds
+        model: LLM model to use (None = inherit from parent)
+        temperature: LLM temperature (None = inherit from parent)
+        memory_path: Path to memory folder (for memory sub-agents)
+        extra: Additional configuration
+    """
+
+    name: str
+    description: str = ""
+    tools: list[str] = field(default_factory=list)
+    system_prompt: str = ""
+    prompt_file: str | None = None
+    can_modify: bool = False
+    stateless: bool = True
+    interactive: bool = False
+    output_to: OutputTarget = OutputTarget.CONTROLLER
+    output_module: str | None = None
+    max_turns: int = 10
+    timeout: float = 300.0
+    model: str | None = None
+    temperature: float | None = None
+    memory_path: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def load_prompt(self, agent_path: Path | None = None) -> str:
+        """
+        Load system prompt from file or use inline prompt.
+
+        Args:
+            agent_path: Base path for resolving prompt_file
+
+        Returns:
+            System prompt string
+        """
+        if self.system_prompt:
+            return self.system_prompt
+
+        if self.prompt_file and agent_path:
+            prompt_path = agent_path / self.prompt_file
+            if prompt_path.exists():
+                return prompt_path.read_text(encoding="utf-8")
+
+        return f"You are a {self.name} sub-agent."
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SubAgentConfig":
+        """Create config from dictionary (e.g., YAML config)."""
+        # Handle output_to conversion
+        if "output_to" in data and isinstance(data["output_to"], str):
+            data["output_to"] = OutputTarget(data["output_to"])
+
+        # Filter to known fields
+        known_fields = {
+            "name",
+            "description",
+            "tools",
+            "system_prompt",
+            "prompt_file",
+            "can_modify",
+            "stateless",
+            "interactive",
+            "output_to",
+            "output_module",
+            "max_turns",
+            "timeout",
+            "model",
+            "temperature",
+            "memory_path",
+            "extra",
+        }
+
+        filtered = {k: v for k, v in data.items() if k in known_fields}
+        extra = {k: v for k, v in data.items() if k not in known_fields}
+
+        if extra:
+            filtered.setdefault("extra", {}).update(extra)
+
+        return cls(**filtered)
+
+
+@dataclass
+class SubAgentInfo:
+    """
+    Sub-agent information for registration and system prompt.
+
+    Lightweight representation for listing available sub-agents.
+    """
+
+    name: str
+    description: str
+    can_modify: bool = False
+    interactive: bool = False
+
+    def to_prompt_line(self) -> str:
+        """Format for system prompt sub-agent list."""
+        suffix = ""
+        if self.can_modify:
+            suffix = " [can modify files]"
+        if self.interactive:
+            suffix = " [interactive]"
+        return f"- {self.name}: {self.description}{suffix}"
+
+    @classmethod
+    def from_config(cls, config: SubAgentConfig) -> "SubAgentInfo":
+        """Create info from config."""
+        return cls(
+            name=config.name,
+            description=config.description,
+            can_modify=config.can_modify,
+            interactive=config.interactive,
+        )
