@@ -15,14 +15,26 @@ controller:
 # System prompt (loaded from file)
 system_prompt_file: prompts/system.md
 
+# Startup trigger - initialize character on start
+startup_trigger:
+  prompt: "Agent starting. Use memory_read to get your character definition and rules. Then greet as your character."
+
 # Input configuration
 input:
   type: cli
   prompt: "User: "
 
-# Available tools (minimal - orchestrator doesn't need many)
+# Available tools (needed by controller and sub-agents)
 tools:
+  - name: tree
+    type: builtin
   - name: read
+    type: builtin
+  - name: write
+    type: builtin
+  - name: edit
+    type: builtin
+  - name: grep
     type: builtin
   - name: glob
     type: builtin
