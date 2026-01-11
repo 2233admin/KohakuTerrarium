@@ -1,5 +1,5 @@
 """
-ASR (Automatic Speech Recognition) input module.
+ASR (Automatic Speech Recognition) base classes.
 
 Provides abstract interface for speech-to-text with support for:
 - Local Whisper (whisper.cpp, faster-whisper)
@@ -159,6 +159,35 @@ class ASRModule(InputModule, ABC):
         await self._stop_listening()
         logger.info("ASR stopped")
 
+    async def get_input(self) -> TriggerEvent | None:
+        """
+        Get next input event (implements InputModule).
+
+        Returns:
+            TriggerEvent for transcription, or None
+        """
+        if not self._running:
+            await self.start()
+
+        try:
+            result = await self._transcribe()
+            if result and result.text.strip():
+                logger.debug(
+                    "ASR transcription",
+                    text=result.text[:50],
+                    confidence=result.confidence,
+                )
+                return result.to_event()
+        except Exception as e:
+            logger.error("ASR transcription error", error=str(e))
+            self._state = ASRState.ERROR
+            import asyncio
+
+            await asyncio.sleep(0.5)
+            self._state = ASRState.LISTENING
+
+        return None
+
     async def listen(self) -> AsyncIterator[TriggerEvent]:
         """
         Listen for speech and yield transcription events.
@@ -170,23 +199,9 @@ class ASRModule(InputModule, ABC):
             await self.start()
 
         while self._running:
-            try:
-                result = await self._transcribe()
-                if result and result.text.strip():
-                    logger.debug(
-                        "ASR transcription",
-                        text=result.text[:50],
-                        confidence=result.confidence,
-                    )
-                    yield result.to_event()
-            except Exception as e:
-                logger.error("ASR transcription error", error=str(e))
-                self._state = ASRState.ERROR
-                # Brief pause before retry
-                import asyncio
-
-                await asyncio.sleep(0.5)
-                self._state = ASRState.LISTENING
+            event = await self.get_input()
+            if event:
+                yield event
 
     # === Abstract methods for subclasses ===
 
@@ -214,7 +229,7 @@ class ASRModule(InputModule, ABC):
 
 
 # =============================================================================
-# Placeholder Implementations (to be replaced with actual backends)
+# Placeholder Implementations (for testing)
 # =============================================================================
 
 

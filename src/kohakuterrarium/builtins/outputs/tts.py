@@ -244,12 +244,9 @@ class TTSModule(OutputModule, ABC):
         """Write text to TTS (implements OutputModule)."""
         await self.stream(text)
 
-    async def write_line(self, text: str) -> None:
-        """Write line to TTS (implements OutputModule)."""
-        await self.stream(text)
-        # Newline might indicate end of thought
-        if self._text_buffer.strip():
-            await self.flush()
+    async def write_stream(self, chunk: str) -> None:
+        """Write streaming chunk to TTS (implements OutputModule)."""
+        await self.stream(chunk)
 
     # === Abstract methods for subclasses ===
 

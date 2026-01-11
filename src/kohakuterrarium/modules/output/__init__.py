@@ -1,10 +1,12 @@
 """
 Output module - route and deliver agent output.
 
+Base classes and protocols are defined here.
+Implementations are in kohakuterrarium.builtins.outputs.
+
 Exports:
 - OutputModule: Protocol for output modules
 - BaseOutputModule: Base class for output modules
-- StdoutOutput: Terminal output implementation
 - OutputRouter: Routes parse events to outputs
 """
 
@@ -14,7 +16,6 @@ from kohakuterrarium.modules.output.router import (
     OutputRouter,
     OutputState,
 )
-from kohakuterrarium.modules.output.stdout import PrefixedStdoutOutput, StdoutOutput
 
 __all__ = [
     # Protocol and base
@@ -24,7 +25,4 @@ __all__ = [
     "OutputRouter",
     "MultiOutputRouter",
     "OutputState",
-    # Implementations
-    "StdoutOutput",
-    "PrefixedStdoutOutput",
 ]

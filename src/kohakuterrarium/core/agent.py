@@ -19,12 +19,20 @@ from kohakuterrarium.core.executor import Executor
 from kohakuterrarium.core.loader import ModuleLoader, ModuleLoadError
 from kohakuterrarium.core.registry import Registry
 from kohakuterrarium.llm.openai import OpenAIProvider
+from kohakuterrarium.builtins.inputs import (
+    CLIInput,
+    create_builtin_input,
+    is_builtin_input,
+)
+from kohakuterrarium.builtins.outputs import (
+    StdoutOutput,
+    create_builtin_output,
+    is_builtin_output,
+)
+from kohakuterrarium.builtins.tools import get_builtin_tool
 from kohakuterrarium.modules.input.base import InputModule
-from kohakuterrarium.modules.input.cli import CLIInput
 from kohakuterrarium.modules.output.base import OutputModule
 from kohakuterrarium.modules.output.router import OutputRouter
-from kohakuterrarium.modules.output.stdout import StdoutOutput
-from kohakuterrarium.builtins.tools import get_builtin_tool
 from kohakuterrarium.commands.read import InfoCommand, ReadCommand
 from kohakuterrarium.parsing import (
     CommandEvent,
@@ -341,83 +349,87 @@ class Agent:
         if custom_input:
             self.input = custom_input
         else:
-            # Create from config
-            match self.config.input.type:
-                case "cli":
-                    self.input = CLIInput(
-                        prompt=self.config.input.prompt,
-                        **self.config.input.options,
-                    )
-                case "whisper":
-                    # Builtin Whisper ASR (requires RealtimeSTT)
-                    try:
-                        from kohakuterrarium.modules.input.whisper import (
-                            create_whisper_asr,
-                        )
+            input_type = self.config.input.type
+            options = {
+                "prompt": self.config.input.prompt,
+                **self.config.input.options,
+            }
 
-                        self.input = create_whisper_asr(self.config.input.options)
-                    except ImportError:
-                        logger.error(
-                            "RealtimeSTT not installed. "
-                            "Install with: pip install RealtimeSTT"
-                        )
-                        self.input = CLIInput(prompt=self.config.input.prompt)
-                case "custom" | "package":
-                    if not self.config.input.module or not self.config.input.class_name:
-                        logger.warning(
-                            "Custom input missing module or class, using CLI"
-                        )
-                        self.input = CLIInput(prompt=self.config.input.prompt)
-                    else:
-                        try:
-                            self.input = self._loader.load_instance(
-                                module_path=self.config.input.module,
-                                class_name=self.config.input.class_name,
-                                module_type=self.config.input.type,
-                                options=self.config.input.options,
-                            )
-                        except ModuleLoadError as e:
-                            logger.error("Failed to load custom input", error=str(e))
-                            self.input = CLIInput(prompt=self.config.input.prompt)
-                case _:
-                    # Default to CLI
+            # Check if it's a builtin input type
+            if is_builtin_input(input_type):
+                try:
+                    self.input = create_builtin_input(input_type, options)
+                except Exception as e:
+                    logger.error(
+                        "Failed to create builtin input",
+                        input_type=input_type,
+                        error=str(e),
+                    )
                     self.input = CLIInput(prompt=self.config.input.prompt)
+            elif input_type in ("custom", "package"):
+                # Load custom/package input
+                if not self.config.input.module or not self.config.input.class_name:
+                    logger.warning("Custom input missing module or class, using CLI")
+                    self.input = CLIInput(prompt=self.config.input.prompt)
+                else:
+                    try:
+                        self.input = self._loader.load_instance(
+                            module_path=self.config.input.module,
+                            class_name=self.config.input.class_name,
+                            module_type=input_type,
+                            options=self.config.input.options,
+                        )
+                    except ModuleLoadError as e:
+                        logger.error("Failed to load custom input", error=str(e))
+                        self.input = CLIInput(prompt=self.config.input.prompt)
+            else:
+                # Unknown type, default to CLI
+                logger.warning("Unknown input type, using CLI", input_type=input_type)
+                self.input = CLIInput(prompt=self.config.input.prompt)
 
     def _init_output(self, custom_output: OutputModule | None) -> None:
         """Initialize output module."""
         if custom_output:
             output_module = custom_output
         else:
-            # Create from config
-            match self.config.output.type:
-                case "stdout":
-                    output_module = StdoutOutput(
-                        prefix="",
-                        suffix="\n",
-                        **self.config.output.options,
+            output_type = self.config.output.type
+            options = self.config.output.options.copy()
+
+            # Check if it's a builtin output type
+            if is_builtin_output(output_type):
+                try:
+                    output_module = create_builtin_output(output_type, options)
+                except Exception as e:
+                    logger.error(
+                        "Failed to create builtin output",
+                        output_type=output_type,
+                        error=str(e),
                     )
-                case "custom" | "package":
-                    if (
-                        not self.config.output.module
-                        or not self.config.output.class_name
-                    ):
-                        logger.warning(
-                            "Custom output missing module or class, using stdout"
-                        )
-                        output_module = StdoutOutput()
-                    else:
-                        try:
-                            output_module = self._loader.load_instance(
-                                module_path=self.config.output.module,
-                                class_name=self.config.output.class_name,
-                                module_type=self.config.output.type,
-                                options=self.config.output.options,
-                            )
-                        except ModuleLoadError as e:
-                            logger.error("Failed to load custom output", error=str(e))
-                            output_module = StdoutOutput()
-                case _:
                     output_module = StdoutOutput()
+            elif output_type in ("custom", "package"):
+                # Load custom/package output
+                if not self.config.output.module or not self.config.output.class_name:
+                    logger.warning(
+                        "Custom output missing module or class, using stdout"
+                    )
+                    output_module = StdoutOutput()
+                else:
+                    try:
+                        output_module = self._loader.load_instance(
+                            module_path=self.config.output.module,
+                            class_name=self.config.output.class_name,
+                            module_type=output_type,
+                            options=options,
+                        )
+                    except ModuleLoadError as e:
+                        logger.error("Failed to load custom output", error=str(e))
+                        output_module = StdoutOutput()
+            else:
+                # Unknown type, default to stdout
+                logger.warning(
+                    "Unknown output type, using stdout", output_type=output_type
+                )
+                output_module = StdoutOutput()
 
         self.output_router = OutputRouter(output_module)
 
