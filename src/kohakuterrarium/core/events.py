@@ -102,6 +102,7 @@ class EventType:
     USER_INPUT = "user_input"
     IDLE = "idle"
     TIMER = "timer"
+    CONTEXT_UPDATE = "context_update"
     TOOL_COMPLETE = "tool_complete"
     SUBAGENT_OUTPUT = "subagent_output"
     MONITOR = "monitor"

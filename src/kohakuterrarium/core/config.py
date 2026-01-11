@@ -19,7 +19,9 @@ logger = get_logger(__name__)
 class InputConfig:
     """Configuration for input module."""
 
-    type: str = "cli"
+    type: str = "cli"  # builtin type or "custom"/"package"
+    module: str | None = None  # For custom: "./custom/input.py", for package: "pkg.mod"
+    class_name: str | None = None  # Class name to instantiate
     prompt: str = "> "
     options: dict[str, Any] = field(default_factory=dict)
 
@@ -28,7 +30,9 @@ class InputConfig:
 class TriggerConfig:
     """Configuration for a trigger."""
 
-    type: str
+    type: str  # builtin type (timer, idle, etc.) or "custom"/"package"
+    module: str | None = None  # For custom: "./custom/trigger.py"
+    class_name: str | None = None  # Class name to instantiate
     prompt: str | None = None
     options: dict[str, Any] = field(default_factory=dict)
 
@@ -38,8 +42,10 @@ class ToolConfigItem:
     """Configuration for a tool."""
 
     name: str
-    type: str = "builtin"
-    doc: str | None = None
+    type: str = "builtin"  # "builtin", "custom", or "package"
+    module: str | None = None  # For custom: "./custom/tools/my_tool.py"
+    class_name: str | None = None  # Class name to instantiate
+    doc: str | None = None  # Override skill doc path
     options: dict[str, Any] = field(default_factory=dict)
 
 
@@ -47,7 +53,9 @@ class ToolConfigItem:
 class OutputConfig:
     """Configuration for output module."""
 
-    type: str = "stdout"
+    type: str = "stdout"  # builtin type or "custom"/"package"
+    module: str | None = None  # For custom: "./custom/output.py"
+    class_name: str | None = None  # Class name to instantiate
     controller_direct: bool = True
     options: dict[str, Any] = field(default_factory=dict)
 
@@ -57,10 +65,15 @@ class SubAgentConfigItem:
     """Configuration for a sub-agent."""
 
     name: str
-    type: str = "builtin"  # builtin or custom
+    type: str = "builtin"  # "builtin", "custom", or "package"
+    module: str | None = None  # For custom: "./custom/subagents/my_agent.py"
+    config_name: str | None = (
+        None  # Config object name in module (e.g., "MY_AGENT_CONFIG")
+    )
     description: str | None = None
     tools: list[str] = field(default_factory=list)
     can_modify: bool = False
+    interactive: bool = False  # Whether agent stays alive for context updates
     options: dict[str, Any] = field(default_factory=dict)
 
 
@@ -178,29 +191,38 @@ def _parse_input_config(data: dict[str, Any] | None) -> InputConfig:
     """Parse input configuration."""
     if data is None:
         return InputConfig()
+    reserved = {"type", "module", "class", "prompt"}
     return InputConfig(
         type=data.get("type", "cli"),
+        module=data.get("module"),
+        class_name=data.get("class"),
         prompt=data.get("prompt", "> "),
-        options={k: v for k, v in data.items() if k not in ("type", "prompt")},
+        options={k: v for k, v in data.items() if k not in reserved},
     )
 
 
 def _parse_trigger_config(data: dict[str, Any]) -> TriggerConfig:
     """Parse trigger configuration."""
+    reserved = {"type", "module", "class", "prompt"}
     return TriggerConfig(
         type=data.get("type", ""),
+        module=data.get("module"),
+        class_name=data.get("class"),
         prompt=data.get("prompt"),
-        options={k: v for k, v in data.items() if k not in ("type", "prompt")},
+        options={k: v for k, v in data.items() if k not in reserved},
     )
 
 
 def _parse_tool_config(data: dict[str, Any]) -> ToolConfigItem:
     """Parse tool configuration."""
+    reserved = {"name", "type", "module", "class", "doc"}
     return ToolConfigItem(
         name=data.get("name", ""),
         type=data.get("type", "builtin"),
+        module=data.get("module"),
+        class_name=data.get("class"),
         doc=data.get("doc"),
-        options={k: v for k, v in data.items() if k not in ("name", "type", "doc")},
+        options={k: v for k, v in data.items() if k not in reserved},
     )
 
 
@@ -208,28 +230,38 @@ def _parse_output_config(data: dict[str, Any] | None) -> OutputConfig:
     """Parse output configuration."""
     if data is None:
         return OutputConfig()
+    reserved = {"type", "module", "class", "controller_direct"}
     return OutputConfig(
         type=data.get("type", "stdout"),
+        module=data.get("module"),
+        class_name=data.get("class"),
         controller_direct=data.get("controller_direct", True),
-        options={
-            k: v for k, v in data.items() if k not in ("type", "controller_direct")
-        },
+        options={k: v for k, v in data.items() if k not in reserved},
     )
 
 
 def _parse_subagent_config(data: dict[str, Any]) -> SubAgentConfigItem:
     """Parse sub-agent configuration."""
+    reserved = {
+        "name",
+        "type",
+        "module",
+        "config",
+        "description",
+        "tools",
+        "can_modify",
+        "interactive",
+    }
     return SubAgentConfigItem(
         name=data.get("name", ""),
         type=data.get("type", "builtin"),
+        module=data.get("module"),
+        config_name=data.get("config"),
         description=data.get("description"),
         tools=data.get("tools", []),
         can_modify=data.get("can_modify", False),
-        options={
-            k: v
-            for k, v in data.items()
-            if k not in ("name", "type", "description", "tools", "can_modify")
-        },
+        interactive=data.get("interactive", False),
+        options={k: v for k, v in data.items() if k not in reserved},
     )
 
 

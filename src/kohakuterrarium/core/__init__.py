@@ -4,6 +4,7 @@ Core module - fundamental abstractions and runtime components.
 Exports:
 - Agent: Main agent orchestrator
 - AgentConfig: Agent configuration
+- ModuleLoader: Load custom modules from agent folders
 - TriggerEvent: Universal event type for all components
 - EventType: Common event type constants
 - Conversation: Message history management
@@ -44,6 +45,11 @@ from kohakuterrarium.core.job import (
     JobType,
     generate_job_id,
 )
+from kohakuterrarium.core.loader import (
+    ModuleLoader,
+    ModuleLoadError,
+    load_custom_module,
+)
 from kohakuterrarium.core.registry import Registry, get_registry, register_tool
 
 __all__ = [
@@ -83,4 +89,8 @@ __all__ = [
     "Registry",
     "get_registry",
     "register_tool",
+    # Loader
+    "ModuleLoader",
+    "ModuleLoadError",
+    "load_custom_module",
 ]

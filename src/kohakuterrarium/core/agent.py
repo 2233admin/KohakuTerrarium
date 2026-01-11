@@ -16,8 +16,9 @@ from kohakuterrarium.core.events import (
     create_tool_complete_event,
 )
 from kohakuterrarium.core.executor import Executor
+from kohakuterrarium.core.loader import ModuleLoader, ModuleLoadError
 from kohakuterrarium.core.registry import Registry
-from kohakuterrarium.llm.openai import OPENROUTER_BASE_URL, OpenAIProvider
+from kohakuterrarium.llm.openai import OpenAIProvider
 from kohakuterrarium.modules.input.base import InputModule
 from kohakuterrarium.modules.input.cli import CLIInput
 from kohakuterrarium.modules.output.base import OutputModule
@@ -104,6 +105,9 @@ class Agent:
         self._running = False
         self._shutdown_event = asyncio.Event()
 
+        # Module loader for custom components
+        self._loader = ModuleLoader(agent_path=config.agent_path)
+
         # Initialize components
         self._init_llm()
         self._init_registry()
@@ -141,19 +145,42 @@ class Agent:
         """Initialize module registry and register tools."""
         self.registry = Registry()
 
-        # Register built-in tools based on config
+        # Register tools based on config
         for tool_config in self.config.tools:
-            if tool_config.type == "builtin":
-                tool = self._create_builtin_tool(tool_config.name, tool_config.options)
-                if tool:
-                    self.registry.register_tool(tool)
+            tool = self._create_tool(tool_config)
+            if tool:
+                self.registry.register_tool(tool)
 
-    def _create_builtin_tool(self, name: str, options: dict[str, Any]) -> Any:
-        """Create a built-in tool by name using the tool registry."""
-        tool = get_builtin_tool(name)
-        if tool is None:
-            logger.warning("Unknown built-in tool", tool_name=name)
-        return tool
+    def _create_tool(self, tool_config: Any) -> Any:
+        """Create a tool from config (builtin, custom, or package)."""
+        match tool_config.type:
+            case "builtin":
+                tool = get_builtin_tool(tool_config.name)
+                if tool is None:
+                    logger.warning("Unknown built-in tool", tool_name=tool_config.name)
+                return tool
+
+            case "custom" | "package":
+                if not tool_config.module or not tool_config.class_name:
+                    logger.warning(
+                        "Custom tool missing module or class",
+                        tool_name=tool_config.name,
+                    )
+                    return None
+                try:
+                    return self._loader.load_instance(
+                        module_path=tool_config.module,
+                        class_name=tool_config.class_name,
+                        module_type=tool_config.type,
+                        options=tool_config.options,
+                    )
+                except ModuleLoadError as e:
+                    logger.error("Failed to load custom tool", error=str(e))
+                    return None
+
+            case _:
+                logger.warning("Unknown tool type", tool_type=tool_config.type)
+                return None
 
     def _init_executor(self) -> None:
         """Initialize background executor."""
@@ -178,21 +205,48 @@ class Agent:
         )
 
         # Register sub-agents from config
-        for subagent_config in self.config.subagents:
-            if subagent_config.type == "builtin":
-                config = get_builtin_subagent_config(subagent_config.name)
-                if config:
-                    self.subagent_manager.register(config)
-                else:
-                    logger.warning(
-                        "Unknown builtin sub-agent", subagent_name=subagent_config.name
-                    )
+        for subagent_item in self.config.subagents:
+            config = self._create_subagent_config(
+                subagent_item, get_builtin_subagent_config
+            )
+            if config:
+                self.subagent_manager.register(config)
 
         if self.subagent_manager.list_subagents():
             logger.info(
                 "Sub-agents registered",
                 subagents=self.subagent_manager.list_subagents(),
             )
+
+    def _create_subagent_config(self, item: Any, get_builtin: Any) -> Any:
+        """Create a SubAgentConfig from config item."""
+        match item.type:
+            case "builtin":
+                config = get_builtin(item.name)
+                if config is None:
+                    logger.warning("Unknown builtin sub-agent", subagent_name=item.name)
+                return config
+
+            case "custom" | "package":
+                if not item.module or not item.config_name:
+                    logger.warning(
+                        "Custom sub-agent missing module or config",
+                        subagent_name=item.name,
+                    )
+                    return None
+                try:
+                    return self._loader.load_config_object(
+                        module_path=item.module,
+                        object_name=item.config_name,
+                        module_type=item.type,
+                    )
+                except ModuleLoadError as e:
+                    logger.error("Failed to load custom sub-agent", error=str(e))
+                    return None
+
+            case _:
+                logger.warning("Unknown sub-agent type", subagent_type=item.type)
+                return None
 
     def _init_controller(self) -> None:
         """Initialize controller."""
@@ -245,6 +299,23 @@ class Agent:
                         prompt=self.config.input.prompt,
                         **self.config.input.options,
                     )
+                case "custom" | "package":
+                    if not self.config.input.module or not self.config.input.class_name:
+                        logger.warning(
+                            "Custom input missing module or class, using CLI"
+                        )
+                        self.input = CLIInput(prompt=self.config.input.prompt)
+                    else:
+                        try:
+                            self.input = self._loader.load_instance(
+                                module_path=self.config.input.module,
+                                class_name=self.config.input.class_name,
+                                module_type=self.config.input.type,
+                                options=self.config.input.options,
+                            )
+                        except ModuleLoadError as e:
+                            logger.error("Failed to load custom input", error=str(e))
+                            self.input = CLIInput(prompt=self.config.input.prompt)
                 case _:
                     # Default to CLI
                     self.input = CLIInput(prompt=self.config.input.prompt)
@@ -262,6 +333,26 @@ class Agent:
                         suffix="\n",
                         **self.config.output.options,
                     )
+                case "custom" | "package":
+                    if (
+                        not self.config.output.module
+                        or not self.config.output.class_name
+                    ):
+                        logger.warning(
+                            "Custom output missing module or class, using stdout"
+                        )
+                        output_module = StdoutOutput()
+                    else:
+                        try:
+                            output_module = self._loader.load_instance(
+                                module_path=self.config.output.module,
+                                class_name=self.config.output.class_name,
+                                module_type=self.config.output.type,
+                                options=self.config.output.options,
+                            )
+                        except ModuleLoadError as e:
+                            logger.error("Failed to load custom output", error=str(e))
+                            output_module = StdoutOutput()
                 case _:
                     output_module = StdoutOutput()
 
