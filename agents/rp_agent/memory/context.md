@@ -1,6 +1,12 @@
-# Session Context
+---
+title: Session Context
+summary: Current conversation state, mood, and recent topics
+tags: [context, session, current]
+protected: false
+updated: 2024-01-15
+---
 
-**Current session information (frequently updated)**
+# Session Context
 
 ## Last Updated
 Never

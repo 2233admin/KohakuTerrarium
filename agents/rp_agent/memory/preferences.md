@@ -1,6 +1,12 @@
-# User Preferences
+---
+title: User Preferences
+summary: Communication style, interests, and response preferences
+tags: [preferences, user, style]
+protected: false
+updated: 2024-01-15
+---
 
-**Learned preferences and communication style**
+# User Preferences
 
 ## Communication Style
 No preferences learned yet.
