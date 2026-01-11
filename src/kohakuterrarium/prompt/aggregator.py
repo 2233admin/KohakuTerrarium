@@ -63,8 +63,7 @@ content here
 - **Sub-agents** (explore, plan): Run in background, status reported back
 - **Commands** (info, jobs): Results return after you finish your response
 
-If you need results before continuing, END your response. Don't keep writing.
-Call the function, then STOP and wait for results.
+IMPORTANT: When calling a function, output ONLY the function call block. Do not output any extra text, markers, or filler characters (like dashes, dots, etc.) before or after the function call. If you need results before continuing, end with the function call and nothing else.
 
 ## Commands
 
@@ -105,7 +104,7 @@ Examples:
 - **Direct tools**: Results return after you finish your response
 - **Sub-agents**: Run in background, status reported back
 
-If you need results before continuing, END your response and wait.
+IMPORTANT: When calling a function, output ONLY the function call block. Do not output any extra text, markers, or filler characters before or after. If you need results before continuing, end with the function call and nothing else.
 """.strip()
 
 # Backward compatibility

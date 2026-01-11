@@ -99,6 +99,12 @@ class AgentConfig:
     system_prompt: str = "You are a helpful assistant."
     system_prompt_file: str | None = None
 
+    # Files to inject into system prompt as template variables
+    # Maps variable name to file path (relative to agent folder)
+    # Example: { "character": "memory/character.md" }
+    # Use in system.md: {{ character }}
+    prompt_context_files: dict[str, str] = field(default_factory=dict)
+
     # Skill loading mode: "dynamic" or "static"
     # - dynamic: Model uses [/info] to read tool docs on demand (less tokens upfront)
     # - static: All tool docs included in system prompt (no [/info] needed)
@@ -327,6 +333,7 @@ def load_agent_config(agent_path: str | Path) -> AgentConfig:
         ),
         system_prompt=config_data.get("system_prompt", "You are a helpful assistant."),
         system_prompt_file=config_data.get("system_prompt_file"),
+        prompt_context_files=config_data.get("prompt_context_files", {}),
         skill_mode=controller_data.get(
             "skill_mode", config_data.get("skill_mode", "dynamic")
         ),
@@ -346,6 +353,38 @@ def load_agent_config(agent_path: str | Path) -> AgentConfig:
             with open(prompt_path, encoding="utf-8") as f:
                 config.system_prompt = f.read()
             logger.debug("Loaded system prompt", path=str(prompt_path))
+
+    # Load prompt context files and render into system prompt
+    if config.prompt_context_files and config.agent_path:
+        context_vars: dict[str, str] = {}
+        for var_name, file_path in config.prompt_context_files.items():
+            full_path = config.agent_path / file_path
+            if full_path.exists():
+                with open(full_path, encoding="utf-8") as f:
+                    context_vars[var_name] = f.read()
+                logger.debug(
+                    "Loaded prompt context file",
+                    variable=var_name,
+                    path=str(full_path),
+                )
+            else:
+                logger.warning(
+                    "Prompt context file not found",
+                    variable=var_name,
+                    path=str(full_path),
+                )
+
+        # Render template with context variables
+        if context_vars:
+            from kohakuterrarium.prompt.template import render_template_safe
+
+            config.system_prompt = render_template_safe(
+                config.system_prompt, **context_vars
+            )
+            logger.debug(
+                "Rendered system prompt with context",
+                variables=list(context_vars.keys()),
+            )
 
     logger.info("Agent config loaded", agent_name=config.name, model=config.model)
     return config

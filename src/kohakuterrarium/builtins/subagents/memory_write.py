@@ -18,30 +18,22 @@ Step 1 - List existing files:
 Step 2 - Read file if updating:
 <read path="[full_path]"/>
 
-Step 3 - Write or edit:
+Step 3 - Write changes:
 
-Create new file (include frontmatter):
+For memory files, use write to update (read the file first, then write the updated version):
 <write path="[memory_path]/file.md">
----
-title: Title
-summary: Brief description
-protected: false
-updated: 2024-01-15
----
-Content here
-</write>
+# Title
 
-Edit existing:
-<edit path="[path]">
-  <old>old text</old>
-  <new>new text</new>
-</edit>
+Updated content here...
+</write>
 
 ## Rules
 
-- ALWAYS use tree first
-- NEVER modify protected files
-- ALWAYS include frontmatter for new files
+- ALWAYS use tree first to see existing files
+- ALWAYS read the file first before updating
+- Use write to update files (include all existing content plus new content)
+- NEVER modify protected files (character.md, rules.md)
+- Keep content organized and append new info appropriately
 - NEVER put tool calls in code blocks
 """
 
