@@ -24,6 +24,7 @@ from kohakuterrarium.modules.tool.base import ToolInfo
 from kohakuterrarium.parsing import (
     CommandEvent,
     ParseEvent,
+    ParserConfig,
     StreamParser,
     SubAgentCallEvent,
     TextEvent,
@@ -138,8 +139,9 @@ class Controller:
         self._event_queue: asyncio.Queue[TriggerEvent] = asyncio.Queue()
         self._pending_events: list[TriggerEvent] = []
 
-        # Stream parser
-        self._parser = StreamParser()
+        # Stream parser (config built lazily from registry)
+        self._parser_config: ParserConfig | None = None
+        self._parser: StreamParser | None = None
 
         # Job store (shared with executor if provided)
         if executor:
@@ -162,6 +164,13 @@ class Controller:
 
         # Setup system prompt
         self._setup_system_prompt()
+
+    def _get_parser(self) -> StreamParser:
+        """Get parser with current registry tools."""
+        # Build config from current registry state
+        known_tools = set(self.registry.list_tools())
+        self._parser_config = ParserConfig(known_tools=known_tools)
+        return StreamParser(self._parser_config)
 
     def _setup_system_prompt(self) -> None:
         """Setup initial system prompt."""
@@ -280,7 +289,7 @@ class Controller:
         messages = self.conversation.to_messages()
 
         assistant_content = ""
-        self._parser = StreamParser()
+        self._parser = self._get_parser()
 
         async for chunk in self.llm.chat(messages, stream=True):
             assistant_content += chunk

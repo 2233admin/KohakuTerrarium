@@ -93,6 +93,9 @@ class AgentConfig:
     subagents: list[SubAgentConfigItem] = field(default_factory=list)
     output: OutputConfig = field(default_factory=OutputConfig)
 
+    # Startup trigger (fires once when agent starts)
+    startup_trigger: dict[str, Any] | None = None
+
     # Path to agent folder
     agent_path: Path | None = None
 
@@ -289,6 +292,7 @@ def load_agent_config(agent_path: str | Path) -> AgentConfig:
         tools=[_parse_tool_config(t) for t in config_data.get("tools", [])],
         subagents=[_parse_subagent_config(s) for s in config_data.get("subagents", [])],
         output=_parse_output_config(config_data.get("output")),
+        startup_trigger=config_data.get("startup_trigger"),
         agent_path=agent_path,
     )
 

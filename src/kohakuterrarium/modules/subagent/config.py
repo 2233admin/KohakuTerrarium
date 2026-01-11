@@ -67,17 +67,26 @@ class SubAgentConfig:
             agent_path: Base path for resolving prompt_file
 
         Returns:
-            System prompt string
+            System prompt string with path context injected
         """
-        if self.system_prompt:
-            return self.system_prompt
+        prompt = ""
 
-        if self.prompt_file and agent_path:
+        if self.system_prompt:
+            prompt = self.system_prompt
+        elif self.prompt_file and agent_path:
             prompt_path = agent_path / self.prompt_file
             if prompt_path.exists():
-                return prompt_path.read_text(encoding="utf-8")
+                prompt = prompt_path.read_text(encoding="utf-8")
+        else:
+            prompt = f"You are a {self.name} sub-agent."
 
-        return f"You are a {self.name} sub-agent."
+        # Inject path context if memory_path is set
+        if self.memory_path and agent_path:
+            full_memory_path = agent_path / self.memory_path
+            path_context = f"\n\n## Path Context\nMemory folder path: `{full_memory_path}`\nUse this exact path when calling tools.\n"
+            prompt = prompt + path_context
+
+        return prompt
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SubAgentConfig":

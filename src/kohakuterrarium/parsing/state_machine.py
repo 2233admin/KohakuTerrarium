@@ -19,9 +19,6 @@ from kohakuterrarium.parsing.events import (
     ToolCallEvent,
 )
 from kohakuterrarium.parsing.patterns import (
-    KNOWN_COMMANDS,
-    KNOWN_SUBAGENTS,
-    KNOWN_TOOLS,
     ParserConfig,
     build_tool_args,
     is_command_tag,
@@ -188,9 +185,9 @@ class StreamParser:
 
                 # Check if it's a known tool, sub-agent, or command
                 if (
-                    is_tool_tag(tag_name)
-                    or is_subagent_tag(tag_name)
-                    or is_command_tag(tag_name)
+                    is_tool_tag(tag_name, self.config.known_tools)
+                    or is_subagent_tag(tag_name, self.config.known_subagents)
+                    or is_command_tag(tag_name, self.config.known_commands)
                 ):
                     if is_self_closing:
                         # Self-closing tag, emit immediately
@@ -317,16 +314,16 @@ class StreamParser:
         """Create appropriate event for a completed tag."""
         events: list[ParseEvent] = []
 
-        # Build args from attributes and content
-        args = build_tool_args(tag_name, attrs, content)
+        # Build args from attributes and content (using config's content_arg_map)
+        args = build_tool_args(tag_name, attrs, content, self.config.content_arg_map)
 
-        if is_tool_tag(tag_name):
+        if is_tool_tag(tag_name, self.config.known_tools):
             # Tool call
             raw = self._build_raw_tag(tag_name, attrs, content)
             events.append(ToolCallEvent(name=tag_name, args=args, raw=raw))
             logger.debug("Parsed tool call", tool_name=tag_name)
 
-        elif is_subagent_tag(tag_name):
+        elif is_subagent_tag(tag_name, self.config.known_subagents):
             # Sub-agent call: <agent type="explore">task</agent>
             subagent_type = attrs.get("type", "explore")
             subagent_args = {
@@ -339,7 +336,7 @@ class StreamParser:
             )
             logger.debug("Parsed sub-agent call", subagent_type=subagent_type)
 
-        elif is_command_tag(tag_name):
+        elif is_command_tag(tag_name, self.config.known_commands):
             # Framework command
             if tag_name == "info":
                 cmd_name = "info"

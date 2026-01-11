@@ -24,9 +24,9 @@ from kohakuterrarium.parsing.events import (
     is_text_event,
 )
 from kohakuterrarium.parsing.patterns import (
-    KNOWN_COMMANDS,
-    KNOWN_SUBAGENTS,
-    KNOWN_TOOLS,
+    DEFAULT_COMMANDS,
+    DEFAULT_CONTENT_ARG_MAP,
+    DEFAULT_SUBAGENT_TAGS,
     ParserConfig,
     build_tool_args,
     is_command_tag,
@@ -62,10 +62,10 @@ __all__ = [
     "is_text_event",
     # Config
     "ParserConfig",
-    # Pattern utilities
-    "KNOWN_TOOLS",
-    "KNOWN_SUBAGENTS",
-    "KNOWN_COMMANDS",
+    # Pattern defaults (for extending)
+    "DEFAULT_COMMANDS",
+    "DEFAULT_CONTENT_ARG_MAP",
+    "DEFAULT_SUBAGENT_TAGS",
     "is_tool_tag",
     "is_subagent_tag",
     "is_command_tag",

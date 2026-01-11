@@ -18,7 +18,7 @@ from kohakuterrarium.core.registry import Registry
 from kohakuterrarium.llm.base import LLMProvider
 from kohakuterrarium.modules.subagent.config import OutputTarget, SubAgentConfig
 from kohakuterrarium.modules.tool.base import Tool
-from kohakuterrarium.parsing import StreamParser, TextEvent, ToolCallEvent
+from kohakuterrarium.parsing import ParserConfig, StreamParser, TextEvent, ToolCallEvent
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -99,8 +99,11 @@ class SubAgent:
         # Conversation for this sub-agent
         self.conversation = Conversation()
 
-        # Stream parser
-        self._parser = StreamParser()
+        # Stream parser with known tools from registry
+        self._parser_config = ParserConfig(
+            known_tools=set(self.registry.list_tools()),
+        )
+        self._parser = StreamParser(self._parser_config)
 
         # State
         self._running = False
@@ -213,7 +216,7 @@ class SubAgent:
             # Get response from LLM
             messages = self.conversation.to_messages()
             assistant_content = ""
-            self._parser = StreamParser()
+            self._parser = StreamParser(self._parser_config)
 
             # Track tools to execute
             tool_calls: list[ToolCallEvent] = []
@@ -300,7 +303,7 @@ class SubAgent:
                 "Sub-agent tool start",
                 subagent_name=self.config.name,
                 tool_name=tool_call.name,
-                args=args_preview,
+                tool_args=args_preview,
             )
 
             try:

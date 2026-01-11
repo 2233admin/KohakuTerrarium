@@ -10,7 +10,11 @@ from typing import Any
 
 from kohakuterrarium.core.config import AgentConfig, load_agent_config
 from kohakuterrarium.core.controller import Controller, ControllerConfig
-from kohakuterrarium.core.events import TriggerEvent, create_tool_complete_event
+from kohakuterrarium.core.events import (
+    EventType,
+    TriggerEvent,
+    create_tool_complete_event,
+)
 from kohakuterrarium.core.executor import Executor
 from kohakuterrarium.core.registry import Registry
 from kohakuterrarium.llm.openai import OPENROUTER_BASE_URL, OpenAIProvider
@@ -289,6 +293,7 @@ class Agent:
         Run the agent main loop.
 
         Handles:
+        - Startup triggers
         - Getting input
         - Running controller
         - Processing tool calls
@@ -297,6 +302,9 @@ class Agent:
         await self.start()
 
         try:
+            # Fire startup trigger if configured
+            await self._fire_startup_trigger()
+
             while self._running:
                 # Get input
                 event = await self.input.get_input()
@@ -321,6 +329,25 @@ class Agent:
             raise
         finally:
             await self.stop()
+
+    async def _fire_startup_trigger(self) -> None:
+        """Fire startup trigger if configured."""
+        startup_trigger = self.config.startup_trigger
+        if not startup_trigger:
+            return
+
+        logger.info("Firing startup trigger")
+
+        # Create startup event with configured prompt
+        event = TriggerEvent(
+            type=EventType.STARTUP,
+            content=startup_trigger.get("prompt", "Agent starting up."),
+            context={"trigger": "startup"},
+            prompt_override=startup_trigger.get("prompt"),
+            stackable=False,
+        )
+
+        await self._process_event(event)
 
     async def _process_event(self, event: TriggerEvent) -> None:
         """Process a single event through the controller."""

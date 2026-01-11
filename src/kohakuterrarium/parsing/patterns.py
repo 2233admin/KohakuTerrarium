@@ -8,6 +8,28 @@ import re
 from dataclasses import dataclass, field
 
 
+# Default content argument mapping for built-in tools
+DEFAULT_CONTENT_ARG_MAP: dict[str, str] = {
+    "bash": "command",
+    "python": "code",
+    "edit": "diff",
+    "write": "content",
+    "read": "path",
+    "glob": "pattern",
+    "grep": "pattern",
+    "tree": "path",
+    # Commands
+    "info": "tool_name",
+    "read_job": "job_id",
+}
+
+# Default commands (framework-level, not tool-level)
+DEFAULT_COMMANDS: set[str] = {"info", "read_job"}
+
+# Default sub-agent tag (generic agent tag)
+DEFAULT_SUBAGENT_TAGS: set[str] = {"agent"}
+
+
 @dataclass
 class ParserConfig:
     """
@@ -17,6 +39,10 @@ class ParserConfig:
         emit_block_events: Whether to emit BlockStart/BlockEnd events
         buffer_text: Whether to buffer text between blocks
         text_buffer_size: Minimum chars to buffer before emitting
+        known_tools: Set of known tool names (from registry)
+        known_subagents: Set of known sub-agent tag names
+        known_commands: Set of known command names
+        content_arg_map: Mapping of tool name to content argument name
     """
 
     # Whether to emit BlockStartEvent and BlockEndEvent
@@ -27,6 +53,18 @@ class ParserConfig:
 
     # Minimum chars to buffer before emitting text
     text_buffer_size: int = 1
+
+    # Dynamic tool/subagent/command sets (populated from registry)
+    known_tools: set[str] = field(default_factory=set)
+    known_subagents: set[str] = field(
+        default_factory=lambda: DEFAULT_SUBAGENT_TAGS.copy()
+    )
+    known_commands: set[str] = field(default_factory=lambda: DEFAULT_COMMANDS.copy())
+
+    # Content argument mapping (can be extended for custom tools)
+    content_arg_map: dict[str, str] = field(
+        default_factory=lambda: DEFAULT_CONTENT_ARG_MAP.copy()
+    )
 
 
 # Regex for parsing XML-style opening tags with attributes
@@ -105,6 +143,7 @@ def build_tool_args(
     tag_name: str,
     attributes: dict[str, str],
     content: str,
+    content_arg_map: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """
     Build tool arguments from tag attributes and content.
@@ -116,6 +155,7 @@ def build_tool_args(
         tag_name: The tool name
         attributes: Parsed attributes from the tag
         content: Content between opening and closing tags
+        content_arg_map: Optional mapping of tool name to content arg name
 
     Returns:
         Complete args dict for the tool
@@ -125,21 +165,9 @@ def build_tool_args(
     # Map content to the appropriate argument based on tool type
     content = content.strip()
     if content:
-        # Determine what to call the content arg based on tool
-        content_arg_map = {
-            "bash": "command",
-            "python": "code",
-            "edit": "diff",
-            "write": "content",
-            "read": "path",  # For <read>path</read> style
-            "glob": "pattern",
-            "grep": "pattern",
-            # Commands
-            "info": "tool_name",
-            "read_job": "job_id",
-        }
-
-        content_arg = content_arg_map.get(tag_name, "content")
+        # Use provided map or fall back to default
+        arg_map = content_arg_map or DEFAULT_CONTENT_ARG_MAP
+        content_arg = arg_map.get(tag_name, "content")
 
         # Don't override if already set via attribute
         if content_arg not in args:
@@ -148,26 +176,38 @@ def build_tool_args(
     return args
 
 
-# Known tool names for validation
-KNOWN_TOOLS = {"bash", "python", "read", "write", "edit", "glob", "grep"}
+def is_tool_tag(tag_name: str, known_tools: set[str] | None = None) -> bool:
+    """
+    Check if tag name is a known tool.
 
-# Known sub-agent names
-KNOWN_SUBAGENTS = {"agent"}  # Generic agent tag, type specified via attribute
-
-# Known command names
-KNOWN_COMMANDS = {"info", "read_job"}
-
-
-def is_tool_tag(tag_name: str) -> bool:
-    """Check if tag name is a known tool."""
-    return tag_name in KNOWN_TOOLS
+    Args:
+        tag_name: Tag name to check
+        known_tools: Set of known tool names (from registry)
+    """
+    if known_tools is None:
+        return False
+    return tag_name in known_tools
 
 
-def is_subagent_tag(tag_name: str) -> bool:
-    """Check if tag name is a sub-agent call."""
-    return tag_name in KNOWN_SUBAGENTS
+def is_subagent_tag(tag_name: str, known_subagents: set[str] | None = None) -> bool:
+    """
+    Check if tag name is a sub-agent call.
+
+    Args:
+        tag_name: Tag name to check
+        known_subagents: Set of known sub-agent tag names
+    """
+    tags = known_subagents if known_subagents is not None else DEFAULT_SUBAGENT_TAGS
+    return tag_name in tags
 
 
-def is_command_tag(tag_name: str) -> bool:
-    """Check if tag name is a known command."""
-    return tag_name in KNOWN_COMMANDS
+def is_command_tag(tag_name: str, known_commands: set[str] | None = None) -> bool:
+    """
+    Check if tag name is a known command.
+
+    Args:
+        tag_name: Tag name to check
+        known_commands: Set of known command names
+    """
+    cmds = known_commands if known_commands is not None else DEFAULT_COMMANDS
+    return tag_name in cmds

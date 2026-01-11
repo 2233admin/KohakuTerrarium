@@ -24,39 +24,15 @@ logger = get_logger(__name__)
 
 # Default framework hints included in system prompt
 DEFAULT_FRAMEWORK_HINTS = """
-## Tool Call Syntax
+## Tool Usage
 
-Use XML-style tags to call tools. The tag name is the tool name.
+Call tools using XML tags. Examples:
+- <read path="file.py"/>
+- <tree>./memory</tree>
 
-### Single-argument tools (content is the argument):
-```
-<bash>ls -la</bash>
-<python>print("Hello")</python>
-```
+Use <info>tool_name</info> for full documentation.
 
-### Multi-argument tools (use attributes + content):
-```
-<read path="src/main.py"/>
-<write path="new_file.py">file content here</write>
-<edit path="src/main.py">
-@@ -1,1 +1,2 @@
- import os
-+import sys
-</edit>
-```
-
-## Framework Commands
-
-- `<info>tool_name</info>` - Get full documentation for a tool
-- `<read_job>job_id</read_job>` - Read output from a background job
-
-## Sub-Agent Syntax (if available)
-
-Dispatch tasks to specialized sub-agents:
-```
-<agent type="explore">Find files related to authentication</agent>
-<agent type="plan">Design the implementation for user login</agent>
-```
+Write tool calls DIRECTLY in your response, not inside code blocks.
 """.strip()
 
 
