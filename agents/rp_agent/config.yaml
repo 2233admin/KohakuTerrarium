@@ -46,14 +46,22 @@ subagents:
     type: builtin
   - name: memory_write
     type: builtin
-  # Response agent - user-facing output (could be made interactive/external)
-  - name: response
-    type: builtin
+
+  # Output sub-agent - generates in-character responses
+  - name: output
+    type: custom
+    description: Generate in-character roleplay responses
+    prompt_file: prompts/output.md
+    interactive: true
+    context_mode: interrupt_restart
+    output_to: external
+    tools: []
+    max_turns: 3
 
 # Output configuration
 output:
   type: stdout
-  controller_direct: true  # For now, controller output is direct
+  controller_direct: false  # Output goes through sub-agent
 
 # Memory configuration
 memory:
