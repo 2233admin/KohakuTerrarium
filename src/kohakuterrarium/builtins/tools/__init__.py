@@ -17,6 +17,7 @@ from kohakuterrarium.builtins.tools.edit import EditTool
 from kohakuterrarium.builtins.tools.glob import GlobTool
 from kohakuterrarium.builtins.tools.grep import GrepTool
 from kohakuterrarium.builtins.tools.read import ReadTool
+from kohakuterrarium.builtins.tools.tree import TreeTool
 from kohakuterrarium.builtins.tools.write import WriteTool
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "EditTool",
     "GlobTool",
     "GrepTool",
+    "TreeTool",
 ]

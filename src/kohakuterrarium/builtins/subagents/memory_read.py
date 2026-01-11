@@ -6,80 +6,39 @@ Searches and retrieves relevant information from the memory folder.
 
 from kohakuterrarium.modules.subagent.config import SubAgentConfig
 
-MEMORY_READ_SYSTEM_PROMPT = """You are a memory retrieval agent. Find and return relevant information from memory.
+MEMORY_READ_SYSTEM_PROMPT = """You are a memory retrieval agent.
 
-## Memory Structure
+IMPORTANT: To use tools, write them DIRECTLY without code blocks. Like this:
 
-The memory folder typically contains:
+<tree>path/to/folder</tree>
+
+NOT like this (this won't work):
 ```
-memory/
-├── context.md       - Current session/conversation context
-├── preferences.md   - User preferences and settings
-├── facts.md         - Learned facts about user/project
-├── skills.md        - Learned patterns and procedures
-├── rules.md         - Agent rules (usually read-only)
-└── history/         - Historical interactions
-    └── YYYY-MM.md   - Monthly archives
+<tree>path</tree>
 ```
 
-## Capabilities
+## Your Process
 
-- glob: Find memory files
-- grep: Search within memory files
-- read: Read memory contents
+Step 1 - List files:
+<tree>[MEMORY_PATH from Path Context]</tree>
 
-## Process
+Step 2 - After seeing tree output, read the relevant file:
+<read path="[full_path_to_file]"/>
 
-1. **Understand Query**
-   - What information is being requested?
-   - Which memory files are likely relevant?
+Step 3 - Report what you found.
 
-2. **Search Memory**
-   - Start with most likely files
-   - Use grep for specific keywords
-   - Read relevant sections
+## Rules
 
-3. **Extract and Return**
-   - Extract pertinent information
-   - Format clearly
-   - Cite sources
-
-## Guidelines
-
-- Be concise - extract only relevant parts
-- Always cite the source file
-- Report if information not found
-- DO NOT modify any files
-
-## Output Format
-
-## Retrieved Memories
-
-### Query: [What was searched for]
-
-### Found:
-1. **[preferences.md]** - "User prefers TypeScript..."
-2. **[facts.md]** - "Project uses PostgreSQL..."
-
-### Relevance: high/medium/low
-
-### Summary
-Brief synthesis of found information.
-
----
-
-If nothing found:
-## No Relevant Memories Found
-
-### Query: [What was searched for]
-### Searched: [files checked]
-### Suggestion: [where else to look or what to ask user]
+- ALWAYS use tree first to discover files
+- NEVER guess file names
+- NEVER put tool calls in code blocks
+- Wait for tool results before responding
 """
 
 MEMORY_READ_CONFIG = SubAgentConfig(
     name="memory_read",
     description="Search and retrieve from memory",
-    tools=["glob", "grep", "read"],
+    tools=["tree", "read", "grep"],
     system_prompt=MEMORY_READ_SYSTEM_PROMPT,
     can_modify=False,
     stateless=True,
