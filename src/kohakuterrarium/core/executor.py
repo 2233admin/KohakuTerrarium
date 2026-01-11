@@ -120,7 +120,8 @@ class Executor:
         task = asyncio.create_task(self._run_tool(job_id, tool, args))
         self._tasks[job_id] = task
 
-        logger.debug("Submitted tool", job_id=job_id, tool_name=tool_name)
+        logger.info("Running tool: %s", tool_name)
+        logger.debug("Tool job submitted", job_id=job_id, tool_name=tool_name)
         return job_id
 
     async def submit_from_event(self, event: ToolCallEvent) -> str:
@@ -167,11 +168,9 @@ class Executor:
             self.job_store.store_result(job_result)
             self._results[job_id] = job_result
 
-            logger.debug(
-                "Tool completed",
-                job_id=job_id,
-                success=result.success,
-            )
+            status = "done" if result.success else "failed"
+            logger.info("Tool %s: %s", tool.tool_name, status)
+            logger.debug("Tool job completed", job_id=job_id, success=result.success)
 
             # Create completion event
             event = create_tool_complete_event(

@@ -81,10 +81,48 @@ class Agent:
     - Output router
 
     Usage:
-        config = load_agent_config("agents/my_agent")
-        agent = Agent(config)
+        # From config path (recommended)
+        agent = Agent.from_path("agents/my_agent")
         await agent.run()
+
+        # Programmatic usage
+        agent = Agent.from_path("agents/my_agent")
+        await agent.start()
+
+        # Inject events programmatically
+        await agent.inject_input("Hello!")
+
+        # Set custom output handler
+        agent.set_output_handler(lambda text: print(f"AI: {text}"))
+
+        # Monitor state
+        print(f"Running: {agent.is_running}")
+        print(f"Tools: {agent.tools}")
+
+        await agent.stop()
     """
+
+    @classmethod
+    def from_path(
+        cls,
+        config_path: str,
+        *,
+        input_module: InputModule | None = None,
+        output_module: OutputModule | None = None,
+    ) -> "Agent":
+        """
+        Create agent from config directory path.
+
+        Args:
+            config_path: Path to agent config folder (e.g., "agents/my_agent")
+            input_module: Custom input module (overrides config)
+            output_module: Custom output module (overrides config)
+
+        Returns:
+            Configured Agent instance
+        """
+        config = load_agent_config(config_path)
+        return cls(config, input_module=input_module, output_module=output_module)
 
     def __init__(
         self,
@@ -676,6 +714,104 @@ class Agent:
     def is_running(self) -> bool:
         """Check if agent is running."""
         return self._running
+
+    # =========================================================================
+    # Programmatic API
+    # =========================================================================
+
+    @property
+    def tools(self) -> list[str]:
+        """Get list of registered tool names."""
+        return self.registry.list_tools()
+
+    @property
+    def subagents(self) -> list[str]:
+        """Get list of registered sub-agent names."""
+        return self.subagent_manager.list_subagents()
+
+    @property
+    def conversation_history(self) -> list[dict]:
+        """Get conversation history as list of message dicts."""
+        return self.controller.conversation.to_messages()
+
+    async def inject_input(self, text: str, source: str = "programmatic") -> None:
+        """
+        Inject user input programmatically.
+
+        Use this to send input without going through the input module.
+
+        Args:
+            text: Input text to inject
+            source: Source identifier for context
+        """
+        from kohakuterrarium.core.events import create_user_input_event
+
+        event = create_user_input_event(text, source=source)
+        await self._process_event(event)
+
+    async def inject_event(self, event: TriggerEvent) -> None:
+        """
+        Inject a custom event programmatically.
+
+        Args:
+            event: TriggerEvent to inject
+        """
+        await self._process_event(event)
+
+    def set_output_handler(self, handler: Any, replace_default: bool = False) -> None:
+        """
+        Set a custom output handler callback.
+
+        The handler receives text chunks as they're generated.
+
+        Args:
+            handler: Callable that receives (text: str) for each chunk
+            replace_default: If True, replace default output; if False, add as secondary
+
+        Example:
+            agent.set_output_handler(lambda text: print(f"AI: {text}"))
+        """
+        # Create a simple callback output module
+        from kohakuterrarium.modules.output.base import OutputModule
+
+        class CallbackOutput(OutputModule):
+            def __init__(self, callback: Any):
+                self._callback = callback
+
+            async def start(self) -> None:
+                pass
+
+            async def stop(self) -> None:
+                pass
+
+            async def write(self, text: str) -> None:
+                self._callback(text)
+
+            async def write_line(self, text: str) -> None:
+                self._callback(text + "\n")
+
+        callback_output = CallbackOutput(handler)
+
+        if replace_default:
+            self.output_router.default_output = callback_output
+        else:
+            self.output_router.add_secondary(callback_output)
+
+    def get_state(self) -> dict[str, Any]:
+        """
+        Get agent state for monitoring.
+
+        Returns:
+            Dict with agent state information
+        """
+        return {
+            "name": self.config.name,
+            "running": self._running,
+            "tools": self.tools,
+            "subagents": self.subagents,
+            "message_count": len(self.conversation_history),
+            "pending_jobs": len(self.executor._tasks) if self.executor else 0,
+        }
 
 
 async def run_agent(config_path: str) -> None:
