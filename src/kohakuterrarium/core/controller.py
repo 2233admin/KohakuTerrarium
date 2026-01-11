@@ -287,6 +287,7 @@ class Controller:
 
         # Run LLM
         messages = self.conversation.to_messages()
+        logger.info("Generating response...")
 
         assistant_content = ""
         self._parser = self._get_parser()

@@ -26,13 +26,14 @@ logger = get_logger(__name__)
 DEFAULT_FRAMEWORK_HINTS = """
 ## Tool Usage
 
-Call tools using XML tags. Examples:
-- <read path="file.py"/>
-- <tree>./memory</tree>
+Call tools using XML tags:
+- Attributes for short params: `<read path="file.py"/>`
+- Body for content: `<write path="file.py">content here</write>`
+- Body for commands: `<bash>ls -la</bash>`
 
-Use <info>tool_name</info> for full documentation.
+IMPORTANT: For write/edit, put content in the tag BODY, not as attribute.
 
-Write tool calls DIRECTLY in your response, not inside code blocks.
+Use `<info>tool_name</info>` for full documentation.
 """.strip()
 
 
