@@ -986,3 +986,240 @@ class TestInteractiveSubAgentContextModes:
         result = agent._format_context_as_message({"key1": "value1", "key2": "value2"})
         assert "key1: value1" in result
         assert "key2: value2" in result
+
+
+# =============================================================================
+# New Commands Tests
+# =============================================================================
+
+
+class TestJobsCommand:
+    """Tests for JobsCommand."""
+
+    async def test_jobs_no_store(self):
+        """Test jobs command without job store."""
+        from kohakuterrarium.commands.read import JobsCommand
+
+        cmd = JobsCommand()
+
+        # Context without job_store
+        context = MagicMock(spec=[])
+
+        result = await cmd.execute("", context)
+        assert result.error == "No job store available"
+
+    async def test_jobs_no_running(self):
+        """Test jobs command with no running jobs."""
+        from kohakuterrarium.commands.read import JobsCommand
+        from kohakuterrarium.core.job import JobStore
+
+        cmd = JobsCommand()
+        job_store = JobStore()
+
+        context = MagicMock()
+        context.job_store = job_store
+
+        result = await cmd.execute("", context)
+        assert result.content == "No running jobs."
+
+    async def test_jobs_with_running(self):
+        """Test jobs command with running jobs."""
+        from kohakuterrarium.commands.read import JobsCommand
+        from kohakuterrarium.core.job import JobState, JobStatus, JobStore, JobType
+
+        cmd = JobsCommand()
+        job_store = JobStore()
+
+        # Add a running job
+        status = JobStatus(
+            job_id="test_123",
+            job_type=JobType.TOOL,
+            type_name="bash",
+            state=JobState.RUNNING,
+        )
+        job_store.register(status)
+
+        context = MagicMock()
+        context.job_store = job_store
+
+        result = await cmd.execute("", context)
+        assert "test_123" in result.content
+        assert "running" in result.content
+
+
+class TestWaitCommand:
+    """Tests for WaitCommand."""
+
+    async def test_wait_no_job_id(self):
+        """Test wait command without job ID."""
+        from kohakuterrarium.commands.read import WaitCommand
+
+        cmd = WaitCommand()
+        context = MagicMock()
+        context.job_store = MagicMock()
+
+        result = await cmd.execute("", context)
+        assert "No job_id provided" in result.error
+
+    async def test_wait_job_not_found(self):
+        """Test wait command with non-existent job."""
+        from kohakuterrarium.commands.read import WaitCommand
+        from kohakuterrarium.core.job import JobStore
+
+        cmd = WaitCommand()
+        job_store = JobStore()
+
+        context = MagicMock()
+        context.job_store = job_store
+
+        result = await cmd.execute("nonexistent_123", context)
+        assert "Job not found" in result.error
+
+    async def test_wait_already_complete(self):
+        """Test wait command with already completed job."""
+        from kohakuterrarium.commands.read import WaitCommand
+        from kohakuterrarium.core.job import (
+            JobResult,
+            JobState,
+            JobStatus,
+            JobStore,
+            JobType,
+        )
+
+        cmd = WaitCommand()
+        job_store = JobStore()
+
+        # Add completed job
+        status = JobStatus(
+            job_id="done_123",
+            job_type=JobType.TOOL,
+            type_name="bash",
+            state=JobState.DONE,
+        )
+        job_store.register(status)
+        job_store.store_result(
+            JobResult(
+                job_id="done_123",
+                output="Hello world",
+            )
+        )
+
+        context = MagicMock()
+        context.job_store = job_store
+
+        result = await cmd.execute("done_123", context)
+        assert "DONE" in result.content
+        assert "Hello world" in result.content
+
+
+# =============================================================================
+# Aggregator Tests
+# =============================================================================
+
+
+class TestAggregatorSkillMode:
+    """Tests for aggregator skill_mode functionality."""
+
+    def test_dynamic_mode_hints(self):
+        """Test dynamic mode includes info command hint."""
+        from kohakuterrarium.prompt.aggregator import DYNAMIC_FRAMEWORK_HINTS
+
+        assert "<info>" in DYNAMIC_FRAMEWORK_HINTS
+        assert "END your response" in DYNAMIC_FRAMEWORK_HINTS
+
+    def test_static_mode_hints(self):
+        """Test static mode doesn't include info command."""
+        from kohakuterrarium.prompt.aggregator import STATIC_FRAMEWORK_HINTS
+
+        assert "<info>" not in STATIC_FRAMEWORK_HINTS
+
+    def test_aggregate_with_skill_mode_dynamic(self):
+        """Test aggregation with dynamic skill mode."""
+        from kohakuterrarium.prompt.aggregator import aggregate_system_prompt
+
+        result = aggregate_system_prompt(
+            "Base prompt",
+            skill_mode="dynamic",
+        )
+
+        assert "Base prompt" in result
+        assert "<info>" in result
+
+    def test_aggregate_with_skill_mode_static(self):
+        """Test aggregation with static skill mode."""
+        from kohakuterrarium.prompt.aggregator import aggregate_system_prompt
+
+        result = aggregate_system_prompt(
+            "Base prompt",
+            skill_mode="static",
+        )
+
+        assert "Base prompt" in result
+        assert "<info>" not in result
+
+
+class TestBuildFullToolDocs:
+    """Tests for _build_full_tool_docs function."""
+
+    def test_build_full_docs_empty_registry(self):
+        """Test with empty registry."""
+        from kohakuterrarium.core.registry import Registry
+        from kohakuterrarium.prompt.aggregator import _build_full_tool_docs
+
+        registry = Registry()
+        result = _build_full_tool_docs(registry)
+
+        assert result == ""
+
+    def test_build_full_docs_with_tools(self):
+        """Test with registered tools."""
+        from kohakuterrarium.core.registry import Registry
+        from kohakuterrarium.modules.tool.base import ToolInfo
+        from kohakuterrarium.prompt.aggregator import _build_full_tool_docs
+
+        registry = Registry()
+
+        # Register a mock tool
+        mock_tool = MagicMock()
+        mock_tool.tool_name = "test_tool"
+        mock_tool.description = "A test tool"
+        mock_tool.get_parameters_schema.return_value = {}
+        registry.register_tool(mock_tool)
+
+        result = _build_full_tool_docs(registry)
+
+        # Should have some content (at least the header)
+        assert "Function Documentation" in result or "test_tool" in result
+
+
+class TestBuildToolsList:
+    """Tests for _build_tools_list function."""
+
+    def test_build_list_empty(self):
+        """Test with empty registry."""
+        from kohakuterrarium.core.registry import Registry
+        from kohakuterrarium.prompt.aggregator import _build_tools_list
+
+        registry = Registry()
+        result = _build_tools_list(registry)
+
+        assert result == ""
+
+    def test_build_list_with_tools(self):
+        """Test with registered tools."""
+        from kohakuterrarium.core.registry import Registry
+        from kohakuterrarium.prompt.aggregator import _build_tools_list
+
+        registry = Registry()
+
+        mock_tool = MagicMock()
+        mock_tool.tool_name = "my_tool"
+        mock_tool.description = "My test tool"
+        mock_tool.get_parameters_schema.return_value = {}
+        registry.register_tool(mock_tool)
+
+        result = _build_tools_list(registry)
+
+        assert "my_tool" in result
+        assert "My test tool" in result
+        assert "Available Functions" in result
