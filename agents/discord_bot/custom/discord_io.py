@@ -70,6 +70,9 @@ class DiscordMessage:
     mentioned_users: list[int]
     reply_to_id: int | None
     reply_to_author: str | None = None  # Display name of replied-to message author
+    reply_to_content: str | None = None  # Content of replied-to message
+    reply_to_is_bot: bool = False  # Whether replied-to author is a bot
+    is_bot: bool = False  # Whether author is a bot
     timestamp: str = ""  # HH:MM format
     # Short identifiers for bot to reference
     short_msg_id: str = ""
@@ -106,7 +109,8 @@ class RecentMessage:
     short_id: str
     author_name: str
     author_id: int
-    content_preview: str  # First 50 chars
+    content_preview: str  # First 100 chars for quote context
+    is_bot: bool = False  # Whether author is a bot
 
 
 class DiscordClient(discord.Client):
@@ -172,20 +176,28 @@ class DiscordClient(discord.Client):
         return "Bot(unknown)"
 
     async def fetch_channel_history(
-        self, channel: discord.TextChannel | discord.Thread
+        self,
+        channel: discord.TextChannel | discord.Thread,
+        force: bool = False,
     ) -> list[str]:
         """
         Fetch recent message history from a channel.
 
+        Args:
+            channel: Discord channel to fetch from
+            force: If True, always fetch from API even if already fetched
+
         Returns formatted history strings for context.
+        Always fetches from Discord API to ensure fresh data (e.g., after restart).
         """
         if self.history_limit <= 0:
             return []
 
         channel_id = channel.id
-        if channel_id in self._history_fetched:
-            return []
 
+        # Track that we've fetched this channel (for internal bookkeeping)
+        # But always fetch fresh from API
+        already_fetched = channel_id in self._history_fetched
         self._history_fetched.add(channel_id)
 
         try:
@@ -209,7 +221,8 @@ class DiscordClient(discord.Client):
                         short_id=_short_id(msg.id),
                         author_name=msg.author.display_name,
                         author_id=msg.author.id,
-                        content_preview=msg.content[:50] if msg.content else "",
+                        content_preview=msg.content[:100] if msg.content else "",
+                        is_bot=msg.author.bot,
                     )
                 )
 
@@ -219,7 +232,9 @@ class DiscordClient(discord.Client):
                 msg_time = msg.created_at.strftime("%Y-%m-%d %H:%M")
                 # Parse mentions to readable names
                 parsed_content = self.parse_mentions(msg.content, msg.guild)
-                formatted = f"[{msg_time}] [{msg.author.display_name}({short_msg_id})]: {parsed_content}"
+                # Add [BOT] marker if author is a bot
+                bot_marker = "[BOT] " if msg.author.bot else ""
+                formatted = f"[{msg_time}] {bot_marker}[{msg.author.display_name}({short_msg_id})]: {parsed_content}"
                 messages.append(formatted)
 
             # Reverse to chronological order
@@ -268,7 +283,8 @@ class DiscordClient(discord.Client):
                 short_id=_short_id(message.id),
                 author_name=message.author.display_name,
                 author_id=message.author.id,
-                content_preview=message.content[:50] if message.content else "",
+                content_preview=message.content[:100] if message.content else "",
+                is_bot=message.author.bot,
             )
         )
 
@@ -281,11 +297,16 @@ class DiscordClient(discord.Client):
         # Get reply reference if exists
         reply_to_id = None
         reply_to_author = None
+        reply_to_content = None
+        reply_to_is_bot = False
         if message.reference and message.reference.message_id:
             reply_to_id = message.reference.message_id
-            # Try to get reply author from cached message
+            # Try to get reply info from cached message
             if message.reference.cached_message:
-                reply_to_author = message.reference.cached_message.author.display_name
+                ref_msg = message.reference.cached_message
+                reply_to_author = ref_msg.author.display_name
+                reply_to_content = self.parse_mentions(ref_msg.content, message.guild)
+                reply_to_is_bot = ref_msg.author.bot
             else:
                 # Look up in recent messages
                 channel_id = message.channel.id
@@ -293,7 +314,21 @@ class DiscordClient(discord.Client):
                     for recent in self._recent_messages[channel_id]:
                         if recent.message_id == reply_to_id:
                             reply_to_author = recent.author_name
+                            reply_to_content = recent.content_preview
+                            reply_to_is_bot = recent.is_bot
                             break
+                # If not found in cache, try to fetch the message
+                if reply_to_content is None:
+                    try:
+                        ref_msg = await message.channel.fetch_message(reply_to_id)
+                        reply_to_author = ref_msg.author.display_name
+                        reply_to_content = self.parse_mentions(
+                            ref_msg.content[:100] if ref_msg.content else "",
+                            message.guild,
+                        )
+                        reply_to_is_bot = ref_msg.author.bot
+                    except discord.DiscordException:
+                        pass  # Keep whatever we found (or None)
 
         # Parse mentions in content to readable names
         parsed_content = self.parse_mentions(message.content, message.guild)
@@ -315,6 +350,9 @@ class DiscordClient(discord.Client):
             mentioned_users=mentioned_users,
             reply_to_id=reply_to_id,
             reply_to_author=reply_to_author,
+            reply_to_content=reply_to_content,
+            reply_to_is_bot=reply_to_is_bot,
+            is_bot=message.author.bot,
             timestamp=msg_time,
         )
 
@@ -538,6 +576,7 @@ class DiscordInputModule(BaseInputModule):
         history_limit: int = 20,
         client_name: str = "default",
         shared_client: DiscordClient | None = None,
+        instant_memory_file: str | None = None,
     ):
         """
         Initialize Discord input.
@@ -550,6 +589,7 @@ class DiscordInputModule(BaseInputModule):
             history_limit: Number of messages to fetch as history on first message
             client_name: Name for shared client registry
             shared_client: Share client with output module
+            instant_memory_file: Path to memory file to auto-inject into every prompt
         """
         import os
 
@@ -565,6 +605,7 @@ class DiscordInputModule(BaseInputModule):
         self.readonly_channel_ids = readonly_channel_ids
         self.history_limit = history_limit
         self.client_name = client_name
+        self.instant_memory_file = instant_memory_file
 
         logger.info(
             "Initializing Discord input module",
@@ -573,6 +614,7 @@ class DiscordInputModule(BaseInputModule):
                 "channel_ids": channel_ids,
                 "readonly_channel_ids": readonly_channel_ids,
                 "history_limit": history_limit,
+                "instant_memory_file": instant_memory_file,
             },
         )
 
@@ -621,6 +663,42 @@ class DiscordInputModule(BaseInputModule):
                 await self._client_task
             except asyncio.CancelledError:
                 pass
+
+    def _read_instant_memory(self) -> str:
+        """
+        Read instant memory file content.
+
+        Returns formatted memory context or empty string if not configured/readable.
+        """
+        if not self.instant_memory_file:
+            return ""
+
+        try:
+            from pathlib import Path
+
+            path = Path(self.instant_memory_file)
+            if not path.exists():
+                logger.debug(
+                    "Instant memory file not found",
+                    extra={"path": str(path)},
+                )
+                return ""
+
+            content = path.read_text(encoding="utf-8").strip()
+            if not content:
+                return ""
+
+            return (
+                "--- Instant Memory (auto-updated context) ---\n"
+                f"{content}\n"
+                "--- End Instant Memory ---\n\n"
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to read instant memory",
+                extra={"path": self.instant_memory_file, "error": str(e)},
+            )
+            return ""
 
     async def get_input(self) -> TriggerEvent | None:
         """Get next Discord message(s) as TriggerEvent.
@@ -684,26 +762,24 @@ class DiscordInputModule(BaseInputModule):
             # Check if ANY message is a mention
             any_mention = any(m.is_mention for m in messages)
 
-            # Fetch history if this is first message in channel
+            # Always fetch fresh history from Discord API
+            # This ensures history is available even after restart
             history_context = ""
-            if last_msg.channel_id not in self.client._history_fetched:
-                channel = self.client.get_channel(last_msg.channel_id)
-                if not channel:
-                    try:
-                        channel = await self.client.fetch_channel(last_msg.channel_id)
-                    except discord.DiscordException:
-                        channel = None
+            channel = self.client.get_channel(last_msg.channel_id)
+            if not channel:
+                try:
+                    channel = await self.client.fetch_channel(last_msg.channel_id)
+                except discord.DiscordException:
+                    channel = None
 
-                if channel and isinstance(
-                    channel, (discord.TextChannel, discord.Thread)
-                ):
-                    history = await self.client.fetch_channel_history(channel)
-                    if history:
-                        history_context = (
-                            "--- Recent History ---\n"
-                            + "\n".join(history)
-                            + "\n--- End History ---\n\n"
-                        )
+            if channel and isinstance(channel, (discord.TextChannel, discord.Thread)):
+                history = await self.client.fetch_channel_history(channel)
+                if history:
+                    history_context = (
+                        "--- Recent History ---\n"
+                        + "\n".join(history)
+                        + "\n--- End History ---\n\n"
+                    )
 
             # Build context header from last message
             bot_identity = self.client.get_bot_identity()
@@ -725,34 +801,50 @@ class DiscordInputModule(BaseInputModule):
             for msg in messages:
                 readonly_marker = "[READONLY] " if is_readonly else ""
                 ping_marker = "[PINGED] " if msg.is_mention else ""
+                bot_marker = "[BOT] " if msg.is_bot else ""
                 # Format: [timestamp] [markers] [DisplayName|AccountName(userId)]: content
                 # This helps agent understand nicknames vs account names
                 if msg.author_display_name != msg.author_name:
                     author_info = f"{msg.author_display_name}|{msg.author_name}({msg.short_author_id})"
                 else:
                     author_info = f"{msg.author_name}({msg.short_author_id})"
-                # Add reply indicator if this message is a reply
+                # Add reply indicator with quoted content if this message is a reply
                 reply_marker = ""
                 if msg.reply_to_author:
-                    reply_marker = f"[→{msg.reply_to_author}] "
+                    # Include [BOT] marker if replying to a bot
+                    reply_bot = "[BOT]" if msg.reply_to_is_bot else ""
+                    if msg.reply_to_content:
+                        # Truncate quoted content for display
+                        quote_preview = msg.reply_to_content[:60]
+                        if len(msg.reply_to_content) > 60:
+                            quote_preview += "..."
+                        reply_marker = (
+                            f'[→{reply_bot}{msg.reply_to_author}: "{quote_preview}"] '
+                        )
+                    else:
+                        reply_marker = f"[→{reply_bot}{msg.reply_to_author}] "
                 elif msg.reply_to_id:
                     # Have ID but no author name
                     reply_marker = f"[→msg:{_short_id(msg.reply_to_id)}] "
-                msg_header = f"[{msg.timestamp}] {readonly_marker}{ping_marker}{reply_marker}[{author_info}]"
+                msg_header = f"[{msg.timestamp}] {readonly_marker}{ping_marker}{bot_marker}{reply_marker}[{author_info}]"
                 formatted_lines.append(f"{msg_header}: {msg.content}")
 
-            formatted_content = f"{history_context}{context_header}\n" + "\n".join(
-                formatted_lines
+            # Read instant memory (auto-injected context)
+            instant_memory = self._read_instant_memory()
+
+            formatted_content = (
+                f"{instant_memory}{history_context}{context_header}\n"
+                + "\n".join(formatted_lines)
             )
 
             # Append instruction reminder at the end
             instruction_reminder = """
 ---
-Now respond following the system prompt. Output ONLY one of:
-1. [SKIP] - if message not for you
-2. Your in-character response - if addressed/pinged
-3. Memory operation then [SKIP] - if you learned something but won't reply
-Do NOT output anything else (no "user", no markdown headers, no system text).
+Process this message following your system prompt. You can:
+- Think through the message (plain text goes to internal log only)
+- Use tools/memory as needed
+- Use [/output_discord]message[output_discord/] ONLY if you want to respond
+If you don't need to respond, just think or stay silent - no output_discord needed.
 """
             formatted_content += instruction_reminder
 
@@ -804,6 +896,8 @@ class DiscordOutputModule(BaseOutputModule):
         drop_base_chance: float = 0.25,
         drop_increment: float = 0.15,
         drop_max_chance: float = 0.7,
+        dedup_threshold: float = 0.85,
+        dedup_window: int = 5,
     ):
         """
         Initialize Discord output.
@@ -816,6 +910,8 @@ class DiscordOutputModule(BaseOutputModule):
             drop_base_chance: Base chance to drop response when 1 message pending (0.0-1.0)
             drop_increment: Additional chance per extra pending message
             drop_max_chance: Maximum drop chance cap
+            dedup_threshold: Similarity threshold for deduplication (0.0-1.0)
+            dedup_window: Number of recent messages to check for duplicates
         """
         super().__init__()
         self.client = client
@@ -826,6 +922,10 @@ class DiscordOutputModule(BaseOutputModule):
         self.drop_base_chance = drop_base_chance
         self.drop_increment = drop_increment
         self.drop_max_chance = drop_max_chance
+
+        # Deduplication configuration
+        self.dedup_threshold = dedup_threshold
+        self._recent_outputs: deque[str] = deque(maxlen=dedup_window)
 
         # Load filtered keywords
         self._filtered_keywords: set[str] = set()
@@ -884,6 +984,64 @@ class DiscordOutputModule(BaseOutputModule):
 
         return result
 
+    def _similarity(self, a: str, b: str) -> float:
+        """
+        Calculate similarity ratio between two strings.
+
+        Uses a simple character-based approach:
+        - Exact match = 1.0
+        - Normalize strings (lowercase, remove extra whitespace)
+        - Calculate overlap ratio
+        """
+        # Normalize both strings
+        norm_a = " ".join(a.lower().split())
+        norm_b = " ".join(b.lower().split())
+
+        if norm_a == norm_b:
+            return 1.0
+
+        if not norm_a or not norm_b:
+            return 0.0
+
+        # Use length-based similarity for quick check
+        len_a, len_b = len(norm_a), len(norm_b)
+        if len_a == 0 or len_b == 0:
+            return 0.0
+
+        # Check if one is substring of the other
+        if norm_a in norm_b or norm_b in norm_a:
+            return min(len_a, len_b) / max(len_a, len_b)
+
+        # Calculate character overlap (simpler than full difflib)
+        common = 0
+        b_chars = list(norm_b)
+        for c in norm_a:
+            if c in b_chars:
+                common += 1
+                b_chars.remove(c)
+
+        return (2 * common) / (len_a + len_b)
+
+    def _is_duplicate(self, content: str) -> bool:
+        """Check if content is duplicate or near-duplicate of recent output."""
+        if not self._recent_outputs:
+            return False
+
+        for recent in self._recent_outputs:
+            sim = self._similarity(content, recent)
+            if sim >= self.dedup_threshold:
+                logger.debug(
+                    "Duplicate detected",
+                    extra={
+                        "similarity": f"{sim:.2%}",
+                        "threshold": f"{self.dedup_threshold:.2%}",
+                        "recent": recent[:30],
+                    },
+                )
+                return True
+
+        return False
+
     def set_client(self, client: DiscordClient) -> None:
         """Set the Discord client (for delayed initialization)."""
         self.client = client
@@ -897,6 +1055,40 @@ class DiscordOutputModule(BaseOutputModule):
             else:
                 logger.warning("Discord client not found in registry")
         return self.client
+
+    async def on_processing_start(self) -> None:
+        """Start typing indicator when processing begins."""
+        client = self._ensure_client()
+        if not client or not client._current_channel_id:
+            return
+
+        channel_id = client._current_channel_id
+
+        # Don't show typing in read-only channels
+        if client.is_readonly_channel(channel_id):
+            return
+
+        # Get channel and start typing
+        channel = client.get_channel(channel_id)
+        if not channel:
+            try:
+                channel = await client.fetch_channel(channel_id)
+            except discord.DiscordException:
+                return
+
+        if isinstance(channel, (discord.TextChannel, discord.Thread)):
+            try:
+                # Start typing indicator (lasts ~10 seconds, enough for response)
+                await channel.typing()
+                logger.debug(
+                    "Started typing indicator",
+                    extra={"channel_id": channel_id},
+                )
+            except discord.DiscordException as e:
+                logger.debug(
+                    "Failed to start typing",
+                    extra={"error": str(e)},
+                )
 
     def _parse_markers(
         self, content: str, channel_id: int
@@ -980,10 +1172,12 @@ class DiscordOutputModule(BaseOutputModule):
         if not clean_content:
             return
 
-        # Filter out [SKIP] responses (bot chose not to respond)
-        # [SKIP] can appear alone, at start, at end, or with other content
-        if "[SKIP]" in clean_content:
-            logger.debug("Skipping response (bot chose not to reply)")
+        # Check for duplicate/near-duplicate output
+        if self._is_duplicate(clean_content):
+            logger.info(
+                "Filtering duplicate response",
+                extra={"content_preview": clean_content[:50]},
+            )
             return
 
         # Filter out system/format garbage (model hallucination)
@@ -1044,11 +1238,16 @@ class DiscordOutputModule(BaseOutputModule):
         # Apply keyword filter
         final_content = self._filter_keywords(final_content)
 
-        await client.send_message(
+        # Send the message
+        sent = await client.send_message(
             final_content,
             reply_to_id=reply_to_id,
             mentions=mention_ids,
         )
+
+        # Track sent message for deduplication
+        if sent:
+            self._recent_outputs.append(final_content)
 
     async def write_stream(self, chunk: str) -> None:
         """Buffer streaming chunks."""

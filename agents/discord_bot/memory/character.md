@@ -1,4 +1,4 @@
-# Character Definition
+# Character Definition (Protected)
 
 ## Name
 安菲特蒂 (Amphitrite)

@@ -11,9 +11,20 @@ controller:
   max_tokens: 1000000
   api_key_env: OPENROUTER_API_KEY
   base_url: https://openrouter.ai/api/v1
-  # Context limits - keep short since we use memory for persistent context
-  max_messages: 100        # Keep only last 20 messages
-  max_context_chars: 1000000  # ~240k tokens
+
+  # Ephemeral mode - clear conversation after each interaction
+  # The bot receives: system prompt + user message (discord history + memory context)
+  # After responding (including tool calls), conversation is flushed
+  # This forces the bot to use memory system for older context
+  ephemeral: true
+
+  # Parallel controllers - allow handling multiple messages simultaneously
+  # Only works in ephemeral mode (each controller handles one interaction)
+  max_parallel_controllers: 3
+
+  # Context limits (mainly for single interaction, less important in ephemeral mode)
+  max_messages: 128
+  max_context_chars: 1000000
 
 # System prompt (loaded from file)
 system_prompt_file: prompts/system.md
@@ -41,23 +52,32 @@ input:
   readonly_channel_ids: [680728618770497552, 692243859970850907, 772472578933522442, 934172207758868510]
   # Number of history messages to fetch on first message in channel
   # Keep low to avoid agent trying to reply to all historical messages
-  history_limit: 64
+  history_limit: 128
+  # Instant memory - auto-injected into every prompt
+  # The model can update this file to maintain working context across interactions
+  instant_memory_file: ./memory/context.md
 
-# Custom Output - Discord message sending
+# Output Configuration
+# - Default output (stdout): for model "thinking" / internal reasoning
+# - Named outputs: explicit [/output_<name>] blocks in model response
 output:
-  type: custom
-  module: ./custom/discord_io.py
-  class: DiscordOutputModule
-  controller_direct: true  # Controller outputs directly to Discord
-  # Note: output module receives client from input module via shared state
-  # Keyword filter - replaces sensitive words with [filtered]
-  keywords_file: ./filtered_keywords.txt
-  # Or inline: filtered_keywords: [word1, word2, word3]
-  # Drop response chance when new messages pending (to avoid outdated responses)
-  # Formula: min(drop_max_chance, drop_base_chance + (pending-1) * drop_increment)
-  drop_base_chance: 0.25   # 1 pending = 25%
-  drop_increment: 0.15     # +15% per additional pending
-  drop_max_chance: 0.7     # cap at 70%
+  type: stdout  # Default output for thinking goes to stdout
+
+  # Named outputs - model uses [/output_discord]content[output_discord/] to send
+  named_outputs:
+    discord:
+      type: custom
+      module: ./custom/discord_io.py
+      class: DiscordOutputModule
+      # Note: output module receives client from input module via shared state
+      # Keyword filter - replaces sensitive words with [filtered]
+      keywords_file: ./filtered_keywords.txt
+      # Or inline: filtered_keywords: [word1, word2, word3]
+      # Drop response chance when new messages pending (to avoid outdated responses)
+      # Formula: min(drop_max_chance, drop_base_chance + (pending-1) * drop_increment)
+      drop_base_chance: 0.25   # 1 pending = 25%
+      drop_increment: 0.15     # +15% per additional pending
+      drop_max_chance: 0.7     # cap at 70%
 
 # Triggers - autonomous events
 triggers:
