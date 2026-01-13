@@ -86,6 +86,28 @@ class CommandEvent:
 
 
 @dataclass
+class OutputEvent:
+    """
+    Explicit output block detected in LLM output.
+
+    Format: [/output_<target>]content[output_<target>/]
+    Example: [/output_discord]Hello![output_discord/]
+
+    Attributes:
+        target: Output target name (e.g., "discord", "tts")
+        content: Content to output
+        raw: Raw content of the block
+    """
+
+    target: str
+    content: str = ""
+    raw: str = ""
+
+    def __repr__(self) -> str:
+        return f"OutputEvent(target={self.target!r}, content={self.content[:50]!r}...)"
+
+
+@dataclass
 class BlockStartEvent:
     """
     Signals the start of a block (tool, subagent, etc.).
@@ -116,6 +138,7 @@ ParseEvent = (
     | ToolCallEvent
     | SubAgentCallEvent
     | CommandEvent
+    | OutputEvent
     | BlockStartEvent
     | BlockEndEvent
 )

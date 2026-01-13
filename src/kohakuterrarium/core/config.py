@@ -50,14 +50,29 @@ class ToolConfigItem:
 
 
 @dataclass
-class OutputConfig:
-    """Configuration for output module."""
+class OutputConfigItem:
+    """Configuration for a single output module."""
 
+    type: str = "stdout"  # builtin type or "custom"/"package"
+    module: str | None = None  # For custom: "./custom/output.py"
+    class_name: str | None = None  # Class name to instantiate
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class OutputConfig:
+    """Configuration for output modules."""
+
+    # Default output (for model "thinking" / stdout)
     type: str = "stdout"  # builtin type or "custom"/"package"
     module: str | None = None  # For custom: "./custom/output.py"
     class_name: str | None = None  # Class name to instantiate
     controller_direct: bool = True
     options: dict[str, Any] = field(default_factory=dict)
+
+    # Named outputs for explicit [/output_<name>] blocks
+    # Maps name -> OutputConfigItem (e.g., {"discord": OutputConfigItem(...)})
+    named_outputs: dict[str, OutputConfigItem] = field(default_factory=dict)
 
 
 @dataclass
@@ -113,6 +128,14 @@ class AgentConfig:
     # Context management - limits LLM conversation history
     max_messages: int = 50  # Max messages to keep (0 = unlimited)
     max_context_chars: int = 100000  # Max chars (~25k tokens, 0 = unlimited)
+    ephemeral: bool = (
+        False  # Clear conversation after each interaction (for group chat)
+    )
+
+    # Parallel controller settings (only for ephemeral mode)
+    max_parallel_controllers: int = (
+        1  # Max concurrent controller instances (0 = unlimited)
+    )
 
     # Module configs
     input: InputConfig = field(default_factory=InputConfig)
@@ -241,17 +264,36 @@ def _parse_tool_config(data: dict[str, Any]) -> ToolConfigItem:
     )
 
 
+def _parse_output_config_item(data: dict[str, Any]) -> OutputConfigItem:
+    """Parse a single output configuration item."""
+    reserved = {"type", "module", "class"}
+    return OutputConfigItem(
+        type=data.get("type", "stdout"),
+        module=data.get("module"),
+        class_name=data.get("class"),
+        options={k: v for k, v in data.items() if k not in reserved},
+    )
+
+
 def _parse_output_config(data: dict[str, Any] | None) -> OutputConfig:
     """Parse output configuration."""
     if data is None:
         return OutputConfig()
-    reserved = {"type", "module", "class", "controller_direct"}
+
+    # Parse named outputs if present
+    named_outputs: dict[str, OutputConfigItem] = {}
+    if "named_outputs" in data:
+        for name, item_data in data["named_outputs"].items():
+            named_outputs[name] = _parse_output_config_item(item_data)
+
+    reserved = {"type", "module", "class", "controller_direct", "named_outputs"}
     return OutputConfig(
         type=data.get("type", "stdout"),
         module=data.get("module"),
         class_name=data.get("class"),
         controller_direct=data.get("controller_direct", True),
         options={k: v for k, v in data.items() if k not in reserved},
+        named_outputs=named_outputs,
     )
 
 
@@ -343,6 +385,8 @@ def load_agent_config(agent_path: str | Path) -> AgentConfig:
         ),
         max_messages=controller_data.get("max_messages", 50),
         max_context_chars=controller_data.get("max_context_chars", 100000),
+        ephemeral=controller_data.get("ephemeral", False),
+        max_parallel_controllers=controller_data.get("max_parallel_controllers", 1),
         input=_parse_input_config(config_data.get("input")),
         triggers=[_parse_trigger_config(t) for t in config_data.get("triggers", [])],
         tools=[_parse_tool_config(t) for t in config_data.get("tools", [])],

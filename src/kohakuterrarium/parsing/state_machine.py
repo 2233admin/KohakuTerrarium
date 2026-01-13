@@ -17,6 +17,7 @@ from kohakuterrarium.parsing.events import (
     BlockEndEvent,
     BlockStartEvent,
     CommandEvent,
+    OutputEvent,
     ParseEvent,
     SubAgentCallEvent,
     TextEvent,
@@ -25,6 +26,7 @@ from kohakuterrarium.parsing.events import (
 from kohakuterrarium.parsing.patterns import (
     ParserConfig,
     is_command_tag,
+    is_output_tag,
     is_subagent_tag,
     is_tool_tag,
 )
@@ -319,8 +321,14 @@ class StreamParser:
         # Build raw representation
         raw = self._build_raw(name, args, body)
 
-        # Determine block type and create event
-        if is_tool_tag(name, self.config.known_tools):
+        # Check for output tag first (format: output_<target>)
+        is_output, output_target = is_output_tag(name, self.config.known_outputs)
+        if is_output:
+            # Output block - explicit output to named target
+            events.append(OutputEvent(target=output_target, content=body, raw=raw))
+            logger.debug("Parsed output block", target=output_target)
+
+        elif is_tool_tag(name, self.config.known_tools):
             # Tool call
             tool_args = {**args}
             if body:

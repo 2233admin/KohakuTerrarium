@@ -47,6 +47,10 @@ class OutputModule(Protocol):
         """Flush any buffered content."""
         ...
 
+    async def on_processing_start(self) -> None:
+        """Called when agent starts processing (before LLM generates)."""
+        ...
+
 
 class BaseOutputModule(ABC):
     """
@@ -93,4 +97,8 @@ class BaseOutputModule(ABC):
 
     async def flush(self) -> None:
         """Flush buffered content. Default is no-op."""
+        pass
+
+    async def on_processing_start(self) -> None:
+        """Called when agent starts processing. Default is no-op."""
         pass

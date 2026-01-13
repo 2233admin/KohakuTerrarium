@@ -23,6 +23,29 @@ from kohakuterrarium.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+# Framework hints template - {named_outputs_section} is replaced dynamically
+FRAMEWORK_HINTS_OUTPUT_MODEL = """
+## Output Model
+
+**Two types of output:**
+1. **Thinking** - Plain text (not in any block) goes to internal log only
+2. **Named output** - Use `[/output_<name>]content[output_<name>/]` to send to specific destination
+
+Think freely - your reasoning helps you work through problems. Only use output blocks when you need to send content to an external destination.
+{named_outputs_section}
+"""
+
+NAMED_OUTPUTS_SECTION_TEMPLATE = """
+**Available outputs:** {outputs_list}
+
+Example:
+```
+[/output_{first_output}]
+Your message here
+[output_{first_output}/]
+```
+"""
+
 # Framework hints for dynamic skill mode (use [/info] to read docs)
 DYNAMIC_FRAMEWORK_HINTS = """
 ## Calling Functions
@@ -118,6 +141,7 @@ def aggregate_system_prompt(
     include_tools: bool = True,
     include_hints: bool = True,
     skill_mode: str = "dynamic",
+    known_outputs: set[str] | None = None,
     extra_context: dict | None = None,
 ) -> str:
     """
@@ -129,6 +153,7 @@ def aggregate_system_prompt(
         include_tools: Include tool list in prompt
         include_hints: Include framework command hints
         skill_mode: "dynamic" (use [/info]) or "static" (full docs in prompt)
+        known_outputs: Set of available named output targets (e.g., {"discord"})
         extra_context: Extra variables for template rendering
 
     Returns:
@@ -169,6 +194,12 @@ def aggregate_system_prompt(
 
     # Add framework hints (different for each mode)
     if include_hints:
+        # Build output model section with available outputs
+        output_hints = _build_output_hints(known_outputs)
+        if output_hints:
+            parts.append(output_hints)
+
+        # Add function calling hints
         hints = (
             STATIC_FRAMEWORK_HINTS
             if skill_mode == "static"
@@ -179,6 +210,28 @@ def aggregate_system_prompt(
     result = "\n\n".join(parts)
     logger.debug("Aggregated system prompt", length=len(result), skill_mode=skill_mode)
     return result
+
+
+def _build_output_hints(known_outputs: set[str] | None) -> str:
+    """Build output model hints with available named outputs."""
+    logger.debug("Building output hints", known_outputs=known_outputs)
+    if not known_outputs:
+        # No named outputs - just basic output model
+        logger.debug("No known outputs, using basic output model")
+        return FRAMEWORK_HINTS_OUTPUT_MODEL.format(named_outputs_section="").strip()
+
+    # Build named outputs section
+    outputs_list = ", ".join(f"`{name}`" for name in sorted(known_outputs))
+    first_output = sorted(known_outputs)[0]
+
+    named_section = NAMED_OUTPUTS_SECTION_TEMPLATE.format(
+        outputs_list=outputs_list,
+        first_output=first_output,
+    )
+
+    return FRAMEWORK_HINTS_OUTPUT_MODEL.format(
+        named_outputs_section=named_section
+    ).strip()
 
 
 def _build_tools_list(registry: Registry) -> str:

@@ -155,15 +155,22 @@ class Agent:
         # Module loader for custom components
         self._loader = ModuleLoader(agent_path=config.agent_path)
 
+        # Parallel controller support (for ephemeral mode)
+        # Semaphore limits concurrent event processing
+        max_parallel = config.max_parallel_controllers if config.ephemeral else 1
+        self._controller_semaphore = asyncio.Semaphore(max_parallel)
+        self._active_tasks: set[asyncio.Task] = set()
+
         # Initialize components
+        # Order matters: output before controller (need known_outputs for parser)
         self._init_llm()
         self._init_registry()
         self._init_executor()
         self._init_subagents()
+        self._init_output(output_module)  # Before controller - sets _known_outputs
         self._init_controller()
         self._init_commands()
         self._init_input(input_module)
-        self._init_output(output_module)
         self._init_triggers()
 
         logger.info(
@@ -172,6 +179,8 @@ class Agent:
             model=config.model,
             tools=len(self.registry.list_tools()),
             triggers=len(self._triggers),
+            ephemeral=config.ephemeral,
+            max_parallel=max_parallel,
         )
 
     def _init_llm(self) -> None:
@@ -320,24 +329,35 @@ class Agent:
         if subagents_prompt:
             base_prompt = base_prompt + "\n\n" + subagents_prompt
 
+        known_outputs = getattr(self, "_known_outputs", set())
+        logger.debug("Building system prompt", known_outputs=known_outputs)
         system_prompt = aggregate_system_prompt(
             base_prompt,
             self.registry,
             include_tools=True,
             include_hints=True,
+            known_outputs=known_outputs,
         )
 
-        controller_config = ControllerConfig(
+        # Store controller config for creating controllers on-demand (parallel mode)
+        self._controller_config = ControllerConfig(
             system_prompt=system_prompt,
             include_job_status=True,
             include_tools_list=False,  # Already in aggregated prompt
             max_messages=self.config.max_messages,
             max_context_chars=self.config.max_context_chars,
+            ephemeral=self.config.ephemeral,
+            known_outputs=getattr(self, "_known_outputs", set()),
         )
 
-        self.controller = Controller(
+        # Primary controller (always exists)
+        self.controller = self._create_controller()
+
+    def _create_controller(self) -> Controller:
+        """Create a new controller instance (for parallel processing)."""
+        return Controller(
             self.llm,
-            controller_config,
+            self._controller_config,
             executor=self.executor,
             registry=self.registry,
         )
@@ -393,50 +413,73 @@ class Agent:
                 self.input = CLIInput(prompt=self.config.input.prompt)
 
     def _init_output(self, custom_output: OutputModule | None) -> None:
-        """Initialize output module."""
+        """Initialize output modules (default and named)."""
+        # Create default output module
         if custom_output:
-            output_module = custom_output
+            default_output = custom_output
         else:
-            output_type = self.config.output.type
-            options = self.config.output.options.copy()
+            default_output = self._create_output_module(
+                output_type=self.config.output.type,
+                module_path=self.config.output.module,
+                class_name=self.config.output.class_name,
+                options=self.config.output.options.copy(),
+            )
 
-            # Check if it's a builtin output type
-            if is_builtin_output(output_type):
-                try:
-                    output_module = create_builtin_output(output_type, options)
-                except Exception as e:
-                    logger.error(
-                        "Failed to create builtin output",
-                        output_type=output_type,
-                        error=str(e),
-                    )
-                    output_module = StdoutOutput()
-            elif output_type in ("custom", "package"):
-                # Load custom/package output
-                if not self.config.output.module or not self.config.output.class_name:
-                    logger.warning(
-                        "Custom output missing module or class, using stdout"
-                    )
-                    output_module = StdoutOutput()
-                else:
-                    try:
-                        output_module = self._loader.load_instance(
-                            module_path=self.config.output.module,
-                            class_name=self.config.output.class_name,
-                            module_type=output_type,
-                            options=options,
-                        )
-                    except ModuleLoadError as e:
-                        logger.error("Failed to load custom output", error=str(e))
-                        output_module = StdoutOutput()
-            else:
-                # Unknown type, default to stdout
-                logger.warning(
-                    "Unknown output type, using stdout", output_type=output_type
+        # Create named output modules
+        named_outputs: dict[str, OutputModule] = {}
+        for name, output_config in self.config.output.named_outputs.items():
+            output_module = self._create_output_module(
+                output_type=output_config.type,
+                module_path=output_config.module,
+                class_name=output_config.class_name,
+                options=output_config.options.copy(),
+            )
+            named_outputs[name] = output_module
+            logger.debug("Named output registered", output_name=name)
+
+        # Store known outputs for parser config
+        self._known_outputs = set(named_outputs.keys())
+        logger.info("Named outputs registered", named_outputs=list(self._known_outputs))
+
+        self.output_router = OutputRouter(default_output, named_outputs=named_outputs)
+
+    def _create_output_module(
+        self,
+        output_type: str,
+        module_path: str | None,
+        class_name: str | None,
+        options: dict,
+    ) -> OutputModule:
+        """Create a single output module from config."""
+        if is_builtin_output(output_type):
+            try:
+                return create_builtin_output(output_type, options)
+            except Exception as e:
+                logger.error(
+                    "Failed to create builtin output",
+                    output_type=output_type,
+                    error=str(e),
                 )
-                output_module = StdoutOutput()
+                return StdoutOutput()
 
-        self.output_router = OutputRouter(output_module)
+        if output_type in ("custom", "package"):
+            if not module_path or not class_name:
+                logger.warning("Custom output missing module or class, using stdout")
+                return StdoutOutput()
+            try:
+                return self._loader.load_instance(
+                    module_path=module_path,
+                    class_name=class_name,
+                    module_type=output_type,
+                    options=options,
+                )
+            except ModuleLoadError as e:
+                logger.error("Failed to load custom output", error=str(e))
+                return StdoutOutput()
+
+        # Unknown type
+        logger.warning("Unknown output type, using stdout", output_type=output_type)
+        return StdoutOutput()
 
     def _init_triggers(self) -> None:
         """Initialize trigger modules from config."""
@@ -547,6 +590,11 @@ class Agent:
         - Running controller
         - Processing tool calls
         - Routing output
+
+        In ephemeral mode with max_parallel_controllers > 1:
+        - Events are processed concurrently up to the limit
+        - Each event gets its own controller instance
+        - Input loop doesn't block waiting for processing to complete
         """
         await self.start()
 
@@ -556,6 +604,9 @@ class Agent:
 
             idle_logged = False
             while self._running:
+                # Clean up completed tasks
+                self._cleanup_completed_tasks()
+
                 # Get input
                 if not idle_logged:
                     logger.debug("Agent idle, waiting for input...")
@@ -573,15 +624,26 @@ class Agent:
                     # Timeout or no input, continue waiting
                     continue
 
-                # Process input through controller
                 idle_logged = False  # Reset so we log idle again after processing
                 logger.info(
                     "Input received, processing event",
                     event_type=event.type,
                     content_len=len(event.content) if event.content else 0,
                 )
-                await self._process_event(event)
-                logger.debug("Event processing complete, returning to idle")
+
+                # In ephemeral parallel mode, spawn task and continue
+                if self.config.ephemeral and self.config.max_parallel_controllers > 1:
+                    task = asyncio.create_task(self._process_event_parallel(event))
+                    self._active_tasks.add(task)
+                    task.add_done_callback(self._active_tasks.discard)
+                    logger.debug(
+                        "Spawned parallel event task",
+                        active_tasks=len(self._active_tasks),
+                    )
+                else:
+                    # Sequential mode - wait for completion
+                    await self._process_event(event)
+                    logger.debug("Event processing complete, returning to idle")
 
         except KeyboardInterrupt:
             logger.info("Interrupted")
@@ -589,7 +651,45 @@ class Agent:
             logger.error("Agent error", error=str(e))
             raise
         finally:
+            # Wait for active tasks to complete
+            if self._active_tasks:
+                logger.info(
+                    "Waiting for active tasks to complete",
+                    count=len(self._active_tasks),
+                )
+                await asyncio.gather(*self._active_tasks, return_exceptions=True)
             await self.stop()
+
+    def _cleanup_completed_tasks(self) -> None:
+        """Remove completed tasks from active set."""
+        completed = {t for t in self._active_tasks if t.done()}
+        for task in completed:
+            self._active_tasks.discard(task)
+            # Log any exceptions
+            if task.exception():
+                logger.error(
+                    "Parallel task failed",
+                    error=str(task.exception()),
+                )
+
+    async def _process_event_parallel(self, event: TriggerEvent) -> None:
+        """
+        Process event in parallel mode with semaphore.
+
+        Acquires semaphore, creates a new controller, processes event, then releases.
+        """
+        async with self._controller_semaphore:
+            # Create a new controller for this event (ephemeral, independent)
+            controller = self._create_controller()
+            logger.debug(
+                "Processing event with new controller",
+                active_tasks=len(self._active_tasks),
+            )
+            try:
+                await self._process_event_with_controller(event, controller)
+            except Exception as e:
+                logger.error("Parallel event processing failed", error=str(e))
+                raise
 
     async def _fire_startup_trigger(self) -> None:
         """Fire startup trigger if configured."""
@@ -611,8 +711,14 @@ class Agent:
         await self._process_event(event)
 
     async def _process_event(self, event: TriggerEvent) -> None:
+        """Process event using the primary controller."""
+        await self._process_event_with_controller(event, self.controller)
+
+    async def _process_event_with_controller(
+        self, event: TriggerEvent, controller: Controller
+    ) -> None:
         """
-        Process a single event through the controller.
+        Process a single event through the specified controller.
 
         Loops until controller generates no new jobs.
         - Direct tools: wait for completion, feed results back
@@ -627,7 +733,10 @@ class Agent:
             except Exception:
                 pass  # Don't let trigger errors break event processing
 
-        await self.controller.push_event(event)
+        await controller.push_event(event)
+
+        # Notify output modules that processing is starting (e.g., typing indicator)
+        await self.output_router.on_processing_start()
 
         # Track non-direct jobs that haven't been cleaned up yet
         # These persist across loop iterations until their results are acknowledged
@@ -647,7 +756,7 @@ class Agent:
             new_subagent_ids: list[str] = []
 
             # Run controller and process output
-            async for parse_event in self.controller.run_once():
+            async for parse_event in controller.run_once():
                 if isinstance(parse_event, ToolCallEvent):
                     job_id, task, is_direct = await self._start_tool_async(parse_event)
                     if is_direct:
@@ -732,7 +841,7 @@ class Agent:
                     pending_bg=len(pending_background_ids),
                     pending_sa=len(pending_subagent_ids),
                 )
-                await self.controller.push_event(feedback_event)
+                await controller.push_event(feedback_event)
             else:
                 # No feedback to send but we have pending jobs - just continue
                 # This shouldn't normally happen
@@ -742,6 +851,10 @@ class Agent:
                     pending_sa=len(pending_subagent_ids),
                 )
                 break
+
+        # In ephemeral mode, flush conversation after each interaction
+        if controller.is_ephemeral:
+            controller.flush()
 
     async def _start_tool_async(
         self, tool_call: ToolCallEvent

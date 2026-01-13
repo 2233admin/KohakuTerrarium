@@ -42,6 +42,7 @@ class ParserConfig:
         known_tools: Set of known tool names (from registry)
         known_subagents: Set of known sub-agent tag names
         known_commands: Set of known command names
+        known_outputs: Set of known output target names (e.g., "discord", "tts")
         content_arg_map: Mapping of tool name to content argument name
     """
 
@@ -60,6 +61,7 @@ class ParserConfig:
         default_factory=lambda: DEFAULT_SUBAGENT_TAGS.copy()
     )
     known_commands: set[str] = field(default_factory=lambda: DEFAULT_COMMANDS.copy())
+    known_outputs: set[str] = field(default_factory=set)  # e.g., {"discord", "tts"}
 
     # Content argument mapping (can be extended for custom tools)
     content_arg_map: dict[str, str] = field(
@@ -211,3 +213,30 @@ def is_command_tag(tag_name: str, known_commands: set[str] | None = None) -> boo
     """
     cmds = known_commands if known_commands is not None else DEFAULT_COMMANDS
     return tag_name in cmds
+
+
+def is_output_tag(
+    tag_name: str, known_outputs: set[str] | None = None
+) -> tuple[bool, str]:
+    """
+    Check if tag name is an output tag (format: output_<target>).
+
+    Args:
+        tag_name: Tag name to check (e.g., "output_discord")
+        known_outputs: Set of known output target names
+
+    Returns:
+        (is_output, target_name) - e.g., (True, "discord") or (False, "")
+    """
+    if not tag_name.startswith("output_"):
+        return False, ""
+
+    target = tag_name[7:]  # Remove "output_" prefix
+    if not target:
+        return False, ""
+
+    # If known_outputs is provided, validate against it
+    if known_outputs is not None and target not in known_outputs:
+        return False, ""
+
+    return True, target

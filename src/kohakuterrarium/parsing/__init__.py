@@ -20,6 +20,7 @@ from kohakuterrarium.parsing.events import (
     BlockEndEvent,
     BlockStartEvent,
     CommandEvent,
+    OutputEvent,
     ParseEvent,
     SubAgentCallEvent,
     TextEvent,
@@ -33,6 +34,7 @@ from kohakuterrarium.parsing.patterns import (
     DEFAULT_SUBAGENT_TAGS,
     ParserConfig,
     is_command_tag,
+    is_output_tag,
     is_subagent_tag,
     is_tool_tag,
 )
@@ -53,6 +55,7 @@ __all__ = [
     "ToolCallEvent",
     "SubAgentCallEvent",
     "CommandEvent",
+    "OutputEvent",
     "BlockStartEvent",
     "BlockEndEvent",
     "is_action_event",
@@ -66,4 +69,5 @@ __all__ = [
     "is_tool_tag",
     "is_subagent_tag",
     "is_command_tag",
+    "is_output_tag",
 ]

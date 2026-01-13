@@ -51,6 +51,9 @@ class ControllerConfig:
         include_tools_list: Include tool list in system prompt
         batch_stackable_events: Batch stackable events together
         max_context_chars: Maximum context length
+        max_messages: Maximum number of messages to keep
+        ephemeral: If True, clear conversation after each interaction (keep system only)
+        known_outputs: Set of known output target names (e.g., "discord")
     """
 
     system_prompt: str = "You are a helpful assistant."
@@ -59,6 +62,8 @@ class ControllerConfig:
     batch_stackable_events: bool = True
     max_context_chars: int = 100000  # ~25k tokens, reasonable default
     max_messages: int = 50  # Keep last 50 messages
+    ephemeral: bool = False  # Clear after each interaction (for group chat bots)
+    known_outputs: set[str] = field(default_factory=set)  # Output targets for parser
 
 
 @dataclass
@@ -179,13 +184,14 @@ class Controller:
         self._setup_system_prompt()
 
     def _get_parser(self) -> StreamParser:
-        """Get parser with current registry tools and sub-agents."""
+        """Get parser with current registry tools, sub-agents, and outputs."""
         # Build config from current registry state
         known_tools = set(self.registry.list_tools())
         known_subagents = set(self.registry.list_subagents())
         self._parser_config = ParserConfig(
             known_tools=known_tools,
             known_subagents=known_subagents,
+            known_outputs=self.config.known_outputs,
         )
         return StreamParser(self._parser_config)
 
@@ -362,6 +368,20 @@ class Controller:
     def has_pending_events(self) -> bool:
         """Check if there are pending events."""
         return not self._event_queue.empty() or len(self._pending_events) > 0
+
+    def flush(self) -> None:
+        """
+        Clear conversation history (keep system prompt only).
+
+        Used in ephemeral mode after completing an interaction.
+        """
+        self.conversation.clear(keep_system=True)
+        logger.debug("Controller flushed (ephemeral mode)")
+
+    @property
+    def is_ephemeral(self) -> bool:
+        """Check if controller is in ephemeral mode."""
+        return self.config.ephemeral
 
     async def run_loop(
         self,

@@ -12,6 +12,7 @@ from kohakuterrarium.parsing import (
     BlockEndEvent,
     BlockStartEvent,
     CommandEvent,
+    OutputEvent,
     ParseEvent,
     SubAgentCallEvent,
     TextEvent,
@@ -25,10 +26,11 @@ logger = get_logger(__name__)
 class OutputState(Enum):
     """Output routing state."""
 
-    NORMAL = auto()  # Regular text output
+    NORMAL = auto()  # Regular text output (stdout)
     TOOL_BLOCK = auto()  # Inside tool call block (suppress output)
     SUBAGENT_BLOCK = auto()  # Inside sub-agent block (suppress output)
     COMMAND_BLOCK = auto()  # Inside command block
+    OUTPUT_BLOCK = auto()  # Inside explicit output block
 
 
 class OutputRouter:
@@ -36,7 +38,8 @@ class OutputRouter:
     Routes parse events to appropriate output modules.
 
     Handles:
-    - Text events → default output module
+    - Text events → default output module (stdout)
+    - OutputEvent → named output module (e.g., discord, tts)
     - Tool/subagent events → suppress text, emit event for handling
     - Commands → process inline
     """
@@ -45,6 +48,7 @@ class OutputRouter:
         self,
         default_output: OutputModule,
         *,
+        named_outputs: dict[str, OutputModule] | None = None,
         suppress_tool_blocks: bool = True,
         suppress_subagent_blocks: bool = True,
     ):
@@ -52,11 +56,13 @@ class OutputRouter:
         Initialize output router.
 
         Args:
-            default_output: Default output module for text
+            default_output: Default output module for text (stdout)
+            named_outputs: Named output modules (e.g., {"discord": DiscordOutput})
             suppress_tool_blocks: Don't output text inside tool blocks
             suppress_subagent_blocks: Don't output text inside subagent blocks
         """
         self.default_output = default_output
+        self.named_outputs = named_outputs or {}
         self.suppress_tool_blocks = suppress_tool_blocks
         self.suppress_subagent_blocks = suppress_subagent_blocks
 
@@ -64,6 +70,7 @@ class OutputRouter:
         self._pending_tool_calls: list[ToolCallEvent] = []
         self._pending_subagent_calls: list[SubAgentCallEvent] = []
         self._pending_commands: list[CommandEvent] = []
+        self._pending_outputs: list[OutputEvent] = []
 
     @property
     def state(self) -> OutputState:
@@ -91,13 +98,30 @@ class OutputRouter:
         self._pending_commands = []
         return commands
 
+    @property
+    def pending_outputs(self) -> list[OutputEvent]:
+        """Get and clear pending output events."""
+        outputs = self._pending_outputs
+        self._pending_outputs = []
+        return outputs
+
+    def get_output_targets(self) -> list[str]:
+        """Get list of registered output target names."""
+        return list(self.named_outputs.keys())
+
     async def start(self) -> None:
         """Start the router and output modules."""
         await self.default_output.start()
+        for name, output in self.named_outputs.items():
+            await output.start()
+            logger.debug("Named output started", output_name=name)
         logger.debug("Output router started")
 
     async def stop(self) -> None:
         """Stop the router and output modules."""
+        for name, output in self.named_outputs.items():
+            await output.stop()
+            logger.debug("Named output stopped", output_name=name)
         await self.default_output.stop()
         logger.debug("Output router stopped")
 
@@ -124,6 +148,10 @@ class OutputRouter:
                 self._pending_commands.append(event)
                 logger.debug("Command queued", command=event.command)
 
+            case OutputEvent():
+                # Route to named output immediately
+                await self._handle_output(event)
+
             case BlockStartEvent(block_type=block_type):
                 self._handle_block_start(block_type)
 
@@ -134,6 +162,7 @@ class OutputRouter:
         """Handle text event based on current state."""
         match self._state:
             case OutputState.NORMAL:
+                # Default output (stdout) - for model "thinking"
                 await self.default_output.write_stream(text)
 
             case OutputState.TOOL_BLOCK:
@@ -148,8 +177,41 @@ class OutputRouter:
                 # Commands are typically suppressed
                 pass
 
+            case OutputState.OUTPUT_BLOCK:
+                # Output blocks are handled via OutputEvent, suppress streaming
+                pass
+
+    async def _handle_output(self, event: OutputEvent) -> None:
+        """
+        Handle explicit output event.
+
+        Routes to named output module if registered.
+        """
+        target = event.target
+        content = event.content
+
+        if target in self.named_outputs:
+            output_module = self.named_outputs[target]
+            await output_module.write(content)
+            logger.debug(
+                "Output sent to target", target=target, content_len=len(content)
+            )
+        else:
+            # Unknown target - log warning, optionally send to default
+            logger.warning(
+                "Unknown output target, sending to default",
+                target=target,
+                available=list(self.named_outputs.keys()),
+            )
+            await self.default_output.write(f"[output_{target}] {content}")
+
     def _handle_block_start(self, block_type: str) -> None:
         """Handle block start event."""
+        # Check for output block first (format: output_<target>)
+        if block_type.startswith("output_"):
+            self._state = OutputState.OUTPUT_BLOCK
+            return
+
         match block_type:
             case "tool":
                 self._state = OutputState.TOOL_BLOCK
@@ -165,6 +227,15 @@ class OutputRouter:
     async def flush(self) -> None:
         """Flush output modules."""
         await self.default_output.flush()
+        for output in self.named_outputs.values():
+            await output.flush()
+
+    async def on_processing_start(self) -> None:
+        """Notify output modules that processing is starting."""
+        # Call on named outputs (they might want to show typing indicators)
+        for output in self.named_outputs.values():
+            if hasattr(output, "on_processing_start"):
+                await output.on_processing_start()
 
     def reset(self) -> None:
         """Reset router state for new turn."""
@@ -172,6 +243,7 @@ class OutputRouter:
         self._pending_tool_calls.clear()
         self._pending_subagent_calls.clear()
         self._pending_commands.clear()
+        self._pending_outputs.clear()
 
 
 class MultiOutputRouter(OutputRouter):
