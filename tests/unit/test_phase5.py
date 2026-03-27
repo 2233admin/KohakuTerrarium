@@ -213,9 +213,9 @@ class TestPromptAggregation:
             "Base prompt",
             include_hints=True,
         )
-        # Check for XML-style tool syntax hints
-        assert "<read" in result or "<info>" in result
-        assert "XML" in result or "tool" in result.lower()
+        # Check for function call syntax hints
+        assert "[/read]" in result or "[/info]" in result
+        assert "function" in result.lower() or "tool" in result.lower()
 
 
 class TestInputModule:
@@ -223,7 +223,7 @@ class TestInputModule:
 
     def test_cli_input_creation(self):
         """Test creating CLI input."""
-        from kohakuterrarium.modules.input import CLIInput
+        from kohakuterrarium.builtins.inputs.cli import CLIInput
 
         cli = CLIInput(prompt=">>> ")
         assert cli.prompt == ">>> "
@@ -231,7 +231,7 @@ class TestInputModule:
 
     def test_cli_exit_commands(self):
         """Test CLI exit commands."""
-        from kohakuterrarium.modules.input import CLIInput
+        from kohakuterrarium.builtins.inputs.cli import CLIInput
 
         cli = CLIInput(exit_commands=["/quit", "bye"])
         assert "/quit" in cli.exit_commands
@@ -243,7 +243,7 @@ class TestOutputModule:
 
     def test_stdout_output_creation(self):
         """Test creating stdout output."""
-        from kohakuterrarium.modules.output import StdoutOutput
+        from kohakuterrarium.builtins.outputs.stdout import StdoutOutput
 
         out = StdoutOutput(prefix=">> ", suffix="\n")
         assert out.prefix == ">> "
@@ -251,7 +251,8 @@ class TestOutputModule:
 
     def test_output_router_creation(self):
         """Test creating output router."""
-        from kohakuterrarium.modules.output import OutputRouter, StdoutOutput
+        from kohakuterrarium.builtins.outputs.stdout import StdoutOutput
+        from kohakuterrarium.modules.output import OutputRouter
 
         stdout = StdoutOutput()
         router = OutputRouter(stdout)

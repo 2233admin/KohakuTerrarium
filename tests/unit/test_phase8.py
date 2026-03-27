@@ -621,7 +621,7 @@ class TestControllerConfig:
         assert config.include_job_status is True
         assert config.include_tools_list is True
         assert config.batch_stackable_events is True
-        assert config.max_context_chars == 0
+        assert config.max_context_chars == 100000
 
     def test_custom_config(self):
         """Test custom controller config."""
@@ -1124,14 +1124,14 @@ class TestAggregatorSkillMode:
         """Test dynamic mode includes info command hint."""
         from kohakuterrarium.prompt.aggregator import DYNAMIC_FRAMEWORK_HINTS
 
-        assert "<info>" in DYNAMIC_FRAMEWORK_HINTS
-        assert "END your response" in DYNAMIC_FRAMEWORK_HINTS
+        assert "[/info]" in DYNAMIC_FRAMEWORK_HINTS
+        assert "read docs" in DYNAMIC_FRAMEWORK_HINTS
 
     def test_static_mode_hints(self):
         """Test static mode doesn't include info command."""
         from kohakuterrarium.prompt.aggregator import STATIC_FRAMEWORK_HINTS
 
-        assert "<info>" not in STATIC_FRAMEWORK_HINTS
+        assert "[/info]" not in STATIC_FRAMEWORK_HINTS
 
     def test_aggregate_with_skill_mode_dynamic(self):
         """Test aggregation with dynamic skill mode."""
@@ -1143,7 +1143,7 @@ class TestAggregatorSkillMode:
         )
 
         assert "Base prompt" in result
-        assert "<info>" in result
+        assert "[/info]" in result
 
     def test_aggregate_with_skill_mode_static(self):
         """Test aggregation with static skill mode."""
@@ -1155,7 +1155,7 @@ class TestAggregatorSkillMode:
         )
 
         assert "Base prompt" in result
-        assert "<info>" not in result
+        assert "[/info]" not in result
 
 
 class TestBuildFullToolDocs:
