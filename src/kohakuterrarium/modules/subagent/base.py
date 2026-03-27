@@ -177,9 +177,16 @@ class SubAgent:
 
         return limited
 
+    # Default set of tools considered modifying (used when config.modifying_tools is None)
+    DEFAULT_MODIFYING_TOOLS: set[str] = {"write", "edit", "bash", "python"}
+
     def _is_modifying_tool(self, tool_name: str) -> bool:
         """Check if tool can modify files."""
-        modifying_tools = {"write", "edit", "bash", "python"}
+        modifying_tools = (
+            self.config.modifying_tools
+            if self.config.modifying_tools is not None
+            else self.DEFAULT_MODIFYING_TOOLS
+        )
         return tool_name in modifying_tools
 
     def _build_system_prompt(self) -> str:

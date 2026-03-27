@@ -218,11 +218,32 @@ class JobsCommand(BaseCommand):
 
 class WaitCommand(BaseCommand):
     """
-    Wait for a background job to complete.
+    Wait for a background job or sub-agent to complete.
 
     Usage:
-        <wait>job_id</wait>
-        <wait timeout="30">job_id</wait>
+        [/wait]job_id[wait/]              - Wait until job completes (up to 60s)
+        [/wait timeout="30"]job_id[wait/] - Wait up to 30 seconds
+        [/wait timeout="5"]job_id[wait/]  - Quick check (wait 5 seconds max)
+
+    The wait command blocks until:
+    - Job completes (returns result)
+    - Timeout reached (returns timeout message)
+    - Job not found (returns error)
+
+    How it works:
+    - Uses shared job_store (same as executor and subagent_manager)
+    - Polls job status every 0.5 seconds until complete or timeout
+    - Returns job result (output or error) when complete
+
+    When to use:
+    - Sub-agents always run in background; use wait to get their results
+    - Background tools (execution_mode=BACKGROUND) also need wait
+    - Direct tools don't need wait - their results come automatically
+
+    Without wait:
+    - The main agent loop reports job status ("RUNNING", then "DONE")
+    - But the model doesn't block - it continues generating
+    - Wait allows the model to explicitly block for a specific job
     """
 
     @property
@@ -231,7 +252,7 @@ class WaitCommand(BaseCommand):
 
     @property
     def description(self) -> str:
-        return "Wait for a background job to complete"
+        return "Wait for background job/sub-agent to complete (use timeout=N for max seconds)"
 
     async def _execute(self, args: str, context: Any) -> CommandResult:
         """Wait for job."""

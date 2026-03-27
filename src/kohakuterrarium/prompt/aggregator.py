@@ -82,16 +82,33 @@ content here
 ## Execution Model
 
 - **Direct tools** (bash, read, write, etc.): Results return after you finish your response
-- **Sub-agents** (explore, plan): Run in background, status reported back
-- **Commands** (info, jobs): Results return after you finish your response
+- **Sub-agents** (explore, plan): Run in background - you MUST use `wait` to get results
+- **Commands** (info, jobs, wait): Execute during your response
 
 IMPORTANT: When calling a function, output ONLY the function call block. Do not output any extra text, markers, or filler characters (like dashes, dots, etc.) before or after the function call. If you need results before continuing, end with the function call and nothing else.
 
 ## Commands
 
-- `[/info]tool_name[info/]` - read docs (stop and wait for result)
-- `[/jobs][jobs/]` - list running jobs
-- `[/wait]job_id[wait/]` - wait for background job
+- `[/info]tool_name[info/]` - read docs for a tool
+- `[/jobs][jobs/]` - list running background jobs
+- `[/wait]job_id[wait/]` - block until job completes (default 60s timeout)
+- `[/wait timeout="10"]job_id[wait/]` - wait with custom timeout (seconds)
+
+### Wait Command Usage
+
+Sub-agents run in background. To get their results, you MUST call wait:
+
+```
+[/explore]find authentication code[explore/]
+```
+(sub-agent starts, you get job_id like "agent_explore_abc123")
+
+```
+[/wait]agent_explore_abc123[wait/]
+```
+(blocks until complete, then returns result)
+
+Without calling wait, sub-agent results are NOT delivered to you.
 """.strip()
 
 # Framework hints for static skill mode (all docs in prompt)

@@ -11,7 +11,12 @@ from kohakuterrarium.commands.base import (
     CommandResult,
     parse_command_args,
 )
-from kohakuterrarium.commands.read import InfoCommand, ReadCommand
+from kohakuterrarium.commands.read import (
+    InfoCommand,
+    JobsCommand,
+    ReadCommand,
+    WaitCommand,
+)
 
 __all__ = [
     # Protocol and base
@@ -22,4 +27,6 @@ __all__ = [
     # Implementations
     "ReadCommand",
     "InfoCommand",
+    "JobsCommand",
+    "WaitCommand",
 ]

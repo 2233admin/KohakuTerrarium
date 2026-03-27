@@ -69,6 +69,7 @@ class SubAgentConfig:
     model: str | None = None
     temperature: float | None = None
     memory_path: str | None = None
+    modifying_tools: set[str] | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def load_prompt(self, agent_path: Path | None = None) -> str:
@@ -109,6 +110,10 @@ class SubAgentConfig:
         if "context_mode" in data and isinstance(data["context_mode"], str):
             data["context_mode"] = ContextUpdateMode(data["context_mode"])
 
+        # Convert modifying_tools list to set if present
+        if "modifying_tools" in data and isinstance(data["modifying_tools"], list):
+            data["modifying_tools"] = set(data["modifying_tools"])
+
         # Filter to known fields
         known_fields = {
             "name",
@@ -128,6 +133,7 @@ class SubAgentConfig:
             "model",
             "temperature",
             "memory_path",
+            "modifying_tools",
             "extra",
         }
 
