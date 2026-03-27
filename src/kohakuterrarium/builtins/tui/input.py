@@ -1,4 +1,4 @@
-"""TUI input module - reads input via shared TUI session."""
+"""TUI input module - reads input from Textual app."""
 
 import asyncio
 from typing import Any
@@ -7,14 +7,21 @@ from kohakuterrarium.builtins.tui.session import TUISession
 from kohakuterrarium.core.events import TriggerEvent, create_user_input_event
 from kohakuterrarium.core.session import get_session
 from kohakuterrarium.modules.input.base import BaseInputModule
-from kohakuterrarium.utils.logging import get_logger
+from kohakuterrarium.utils.logging import (
+    disable_tui_logging,
+    enable_tui_logging,
+    get_logger,
+)
 
 logger = get_logger(__name__)
 
 
 class TUIInput(BaseInputModule):
     """
-    Input module that reads from a shared TUI session.
+    Input module using Textual full-screen TUI.
+
+    Creates or attaches to a shared TUISession. On start,
+    launches the Textual app as a background task.
 
     Config:
         input:
@@ -26,13 +33,14 @@ class TUIInput(BaseInputModule):
     def __init__(
         self,
         session_key: str | None = None,
-        prompt: str = "> ",
+        prompt: str = "You: ",
         **options: Any,
     ):
         super().__init__()
         self._session_key = session_key
         self._prompt = prompt
         self._tui: TUISession | None = None
+        self._app_task: asyncio.Task | None = None
         self._exit_requested = False
 
     @property
@@ -41,26 +49,43 @@ class TUIInput(BaseInputModule):
         return self._exit_requested
 
     async def _on_start(self) -> None:
-        """Initialize TUI input by attaching to shared session."""
+        """Initialize TUI and launch the Textual app."""
         session = get_session(self._session_key)
         if session.tui is None:
-            session.tui = TUISession()
+            session.tui = TUISession(
+                agent_name=session.key if session.key != "__default__" else "agent",
+            )
         self._tui = session.tui
-        self._tui.running = True
+
+        # Redirect framework logs to TUI Logs tab
+        enable_tui_logging(self._tui.write_log)
+
+        # Build and launch the Textual app
+        await self._tui.start(self._prompt)
+        self._app_task = asyncio.create_task(self._tui.run_app())
         logger.debug("TUI input started", session_key=self._session_key)
 
     async def _on_stop(self) -> None:
-        """Cleanup TUI input."""
+        """Stop the Textual app and restore stderr logging."""
         if self._tui:
             self._tui.stop()
+        if self._app_task and not self._app_task.done():
+            self._app_task.cancel()
+            try:
+                await self._app_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        # Restore stderr logging
+        disable_tui_logging()
         logger.debug("TUI input stopped")
 
     async def get_input(self) -> TriggerEvent | None:
         """
-        Get input from the TUI session.
+        Wait for user input from the Textual app.
 
         Returns:
-            TriggerEvent with user input, or None if exit requested / no input
+            TriggerEvent with user input, or None on exit/error
         """
         if not self._running or not self._tui:
             return None
@@ -69,11 +94,11 @@ class TUIInput(BaseInputModule):
             text = await self._tui.get_input(self._prompt)
 
             if not text:
+                self._exit_requested = True
                 return None
 
             if text.lower() in ("exit", "quit", "/exit", "/quit"):
                 self._exit_requested = True
-                logger.debug("Exit command received")
                 return None
 
             return create_user_input_event(text, source="tui")
