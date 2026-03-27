@@ -45,9 +45,8 @@ If you want to send to {first_output}, wrap your message exactly like above.
 Without the wrapper, nothing gets sent.
 """
 
-# Framework hints for dynamic skill mode (use [/info] to read docs)
-DYNAMIC_FRAMEWORK_HINTS = """
-## Calling Functions
+# Framework hints base - examples are generated dynamically from registry
+_DYNAMIC_HINTS_HEADER = """## Calling Functions
 
 All functions (tools and sub-agents) use this format:
 
@@ -57,35 +56,17 @@ All functions (tools and sub-agents) use this format:
 content here
 [function_name/]
 ```
+"""
 
-Examples:
-
-```
-[/read]@@path=file.py[read/]
-```
-
-```
-[/bash]ls -la[bash/]
-```
-
-```
-[/write]
-@@path=out.txt
-content here
-[write/]
-```
-
-```
-[/explore]find auth code[explore/]
-```
-
+_DYNAMIC_HINTS_FOOTER = """
 ## Execution Model
 
-- **Direct tools** (bash, read, write, etc.): Results return after you finish your response
-- **Sub-agents** (explore, plan): Run in background - you MUST use `wait` to get results
+- **Direct tools**: Results return after you finish your response
+- **Sub-agents**: Run in background - you MUST use `wait` to get results
 - **Commands** (info, jobs, wait): Execute during your response
 
 IMPORTANT: When calling a function, output ONLY the function call block. Do not output any extra text, markers, or filler characters (like dashes, dots, etc.) before or after the function call. If you need results before continuing, end with the function call and nothing else.
+IMPORTANT: You may ONLY call functions listed in the "Available Functions" section above. Do NOT call functions that are not listed.
 
 ## Commands
 
@@ -98,56 +79,94 @@ IMPORTANT: When calling a function, output ONLY the function call block. Do not 
 
 Sub-agents run in background. To get their results, you MUST call wait:
 
-```
-[/explore]find authentication code[explore/]
-```
-(sub-agent starts, you get job_id like "agent_explore_abc123")
-
-```
-[/wait]agent_explore_abc123[wait/]
-```
-(blocks until complete, then returns result)
+1. Call a sub-agent (you get a job_id)
+2. Call `[/wait]job_id[wait/]` to block until it completes
 
 Without calling wait, sub-agent results are NOT delivered to you.
-""".strip()
+"""
 
-# Framework hints for static skill mode (all docs in prompt)
-STATIC_FRAMEWORK_HINTS = """
-## Calling Functions
+_STATIC_HINTS_HEADER = _DYNAMIC_HINTS_HEADER
 
-All functions (tools and sub-agents) use this format:
-
-```
-[/function_name]
-@@arg=value
-content here
-[function_name/]
-```
-
-Examples:
-
-```
-[/read]@@path=file.py[read/]
-```
-
-```
-[/bash]ls -la[bash/]
-```
-
-```
-[/explore]find auth code[explore/]
-```
-
+_STATIC_HINTS_FOOTER = """
 ## Execution Model
 
 - **Direct tools**: Results return after you finish your response
 - **Sub-agents**: Run in background, status reported back
 
 IMPORTANT: When calling a function, output ONLY the function call block. Do not output any extra text, markers, or filler characters before or after. If you need results before continuing, end with the function call and nothing else.
-""".strip()
+IMPORTANT: You may ONLY call functions listed in the "Available Functions" section above. Do NOT call functions that are not listed.
+"""
 
-# Backward compatibility
-DEFAULT_FRAMEWORK_HINTS = DYNAMIC_FRAMEWORK_HINTS
+
+def _build_dynamic_hints(registry: Registry | None = None) -> str:
+    """Build framework hints with examples from actual registered tools."""
+    parts = [_DYNAMIC_HINTS_HEADER.strip()]
+
+    # Generate examples from actual registry
+    examples = _build_tool_examples(registry)
+    if examples:
+        parts.append("Examples:\n" + examples)
+
+    parts.append(_DYNAMIC_HINTS_FOOTER.strip())
+    return "\n\n".join(parts)
+
+
+def _build_static_hints(registry: Registry | None = None) -> str:
+    """Build static framework hints with examples from actual registered tools."""
+    parts = [_STATIC_HINTS_HEADER.strip()]
+
+    examples = _build_tool_examples(registry)
+    if examples:
+        parts.append("Examples:\n" + examples)
+
+    parts.append(_STATIC_HINTS_FOOTER.strip())
+    return "\n\n".join(parts)
+
+
+def _build_tool_examples(registry: Registry | None) -> str:
+    """Generate call examples from actual registered tools and sub-agents."""
+    if not registry:
+        return ""
+
+    examples: list[str] = []
+    tool_names = set(registry.list_tools())
+    subagent_names = set(registry.list_subagents())
+
+    # Pick examples based on what's actually available
+    # Tools with @@arg pattern
+    if "read" in tool_names:
+        examples.append("```\n[/read]@@path=file.py[read/]\n```")
+    elif "json_read" in tool_names:
+        examples.append("```\n[/json_read]@@path=data.json[json_read/]\n```")
+    elif "glob" in tool_names:
+        examples.append("```\n[/glob]@@pattern=**/*.py[glob/]\n```")
+
+    # Tools with content body
+    if "think" in tool_names:
+        examples.append(
+            "```\n[/think]\nAnalyze the problem step by step...\n[think/]\n```"
+        )
+    elif "bash" in tool_names:
+        examples.append("```\n[/bash]ls -la[bash/]\n```")
+
+    # Tools with both @@arg and body
+    if "write" in tool_names:
+        examples.append("```\n[/write]\n@@path=out.txt\ncontent here\n[write/]\n```")
+    elif "scratchpad" in tool_names:
+        examples.append(
+            "```\n[/scratchpad]\n@@action=set\n@@key=plan\nmy plan here\n[scratchpad/]\n```"
+        )
+    elif "send_message" in tool_names:
+        examples.append(
+            "```\n[/send_message]\n@@channel=inbox\nHello from agent\n[send_message/]\n```"
+        )
+
+    # Sub-agent example
+    if subagent_names:
+        first_sa = sorted(subagent_names)[0]
+        examples.append(f"```\n[/{first_sa}]describe the task here[{first_sa}/]\n```")
+
+    return "\n\n".join(examples)
 
 
 def aggregate_system_prompt(
@@ -215,11 +234,11 @@ def aggregate_system_prompt(
         if output_hints:
             parts.append(output_hints)
 
-        # Add function calling hints
+        # Add function calling hints (examples generated from actual registry)
         hints = (
-            STATIC_FRAMEWORK_HINTS
+            _build_static_hints(registry)
             if skill_mode == "static"
-            else DYNAMIC_FRAMEWORK_HINTS
+            else _build_dynamic_hints(registry)
         )
         parts.append(hints)
 
