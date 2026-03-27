@@ -1,0 +1,84 @@
+# builtins/ -- Built-in Components
+
+Ready-to-use tools, sub-agents, inputs, and outputs that ship with the framework.
+Agents reference these by name in their `config.yaml`.
+
+## Tools (16)
+
+| Name | Description |
+|------|-------------|
+| `bash` | Execute shell commands (auto-detects platform shell) |
+| `python` | Execute Python code via subprocess |
+| `read` | Read file contents with optional line range |
+| `write` | Create or overwrite files |
+| `edit` | Edit files using unified diff format |
+| `glob` | Find files by glob pattern |
+| `grep` | Search file contents with regex and type filtering |
+| `tree` | List directory structure with frontmatter summaries |
+| `think` | No-op tool for explicit LLM reasoning |
+| `scratchpad` | Read/write session-scoped key-value working memory |
+| `ask_user` | Request human input mid-execution (CLI) |
+| `http` | Make HTTP requests to APIs and web services |
+| `json_read` | Read and query JSON files with path expressions |
+| `json_write` | Modify JSON files with path expressions |
+| `send_message` | Send a message to a named channel |
+| `wait_channel` | Wait for a message on a named channel |
+
+## Sub-agents (10)
+
+| Name | Description |
+|------|-------------|
+| `explore` | Search and explore codebase (read-only) |
+| `plan` | Create implementation plans (read-only) |
+| `worker` | Implement code changes, fix bugs, refactor (read-write) |
+| `critic` | Review and critique code, plans, or outputs |
+| `summarize` | Summarize long content into concise summaries |
+| `research` | Research topics using files and web access |
+| `coordinator` | Coordinate multiple agents via channels |
+| `memory_read` | Search and retrieve from memory |
+| `memory_write` | Store information to memory (can create files) |
+| `response` | Generate user-facing responses (output sub-agent) |
+
+## Inputs and Outputs
+
+**Inputs:** `cli` (blocking and non-blocking), `whisper` (Silero VAD + Whisper ASR)
+
+**Outputs:** `stdout` (plain and prefixed), `tts` (console TTS with config)
+
+## Usage
+
+```python
+from kohakuterrarium.builtins.tools import get_builtin_tool
+from kohakuterrarium.builtins.subagents import get_builtin_subagent_config
+
+tool = get_builtin_tool("bash")           # Returns BaseTool instance
+config = get_builtin_subagent_config("explore")  # Returns SubAgentConfig
+```
+
+## Adding Custom Builtins
+
+Register new tools with `@register_builtin("name")`:
+
+```python
+from kohakuterrarium.builtins.tools import register_builtin
+from kohakuterrarium.modules.tool.base import BaseTool, ToolResult
+
+@register_builtin("my_tool")
+class MyTool(BaseTool):
+    @property
+    def tool_name(self) -> str: return "my_tool"
+    @property
+    def description(self) -> str: return "Does something useful"
+    async def execute(self, args: dict) -> ToolResult:
+        return ToolResult(output="done")
+```
+
+## File Layout
+
+```
+builtins/
+├── tools/       # 16 tool implementations + registry
+├── subagents/   # 10 sub-agent configs
+├── inputs/      # CLI and Whisper input modules
+└── outputs/     # Stdout and TTS output modules
+```
