@@ -12,6 +12,7 @@ Contains:
 from kohakuterrarium.builtins.inputs import (
     CLIInput,
     NonBlockingCLIInput,
+    TUIInput,
     create_builtin_input,
     get_builtin_input,
     is_builtin_input,
@@ -24,6 +25,7 @@ from kohakuterrarium.builtins.outputs import (
     StdoutOutput,
     TTSConfig,
     TTSModule,
+    TUIOutput,
     create_builtin_output,
     get_builtin_output,
     is_builtin_output,
@@ -74,6 +76,7 @@ __all__ = [
     # Input implementations
     "CLIInput",
     "NonBlockingCLIInput",
+    "TUIInput",
     # Output registry
     "get_builtin_output",
     "is_builtin_output",
@@ -86,4 +89,5 @@ __all__ = [
     "TTSConfig",
     "ConsoleTTS",
     "DummyTTS",
+    "TUIOutput",
 ]

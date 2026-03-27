@@ -87,6 +87,12 @@ def create_builtin_output(name: str, options: dict[str, Any] | None = None) -> A
     raise ValueError(f"Unknown builtin output type: {name}")
 
 
+# Register TUI output
+from kohakuterrarium.builtins.tui.output import TUIOutput
+
+register_builtin_output("tui", TUIOutput)
+
+
 __all__ = [
     # Registry
     "register_builtin_output",
@@ -103,4 +109,5 @@ __all__ = [
     "TTSConfig",
     "ConsoleTTS",
     "DummyTTS",
+    "TUIOutput",
 ]

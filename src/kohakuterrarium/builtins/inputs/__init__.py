@@ -10,11 +10,13 @@ Contains:
 from typing import Any
 
 from kohakuterrarium.builtins.inputs.cli import CLIInput, NonBlockingCLIInput
+from kohakuterrarium.builtins.inputs.none import NoneInput
 
 # Registry of builtin input types
 _BUILTIN_INPUTS: dict[str, type] = {
     "cli": CLIInput,
     "cli_nonblocking": NonBlockingCLIInput,
+    "none": NoneInput,
 }
 
 # Factory functions for inputs that need special handling
@@ -80,6 +82,11 @@ def create_builtin_input(name: str, options: dict[str, Any] | None = None) -> An
     raise ValueError(f"Unknown builtin input type: {name}")
 
 
+# Register TUI input
+from kohakuterrarium.builtins.tui.input import TUIInput
+
+register_builtin_input("tui", TUIInput)
+
 # Try to register whisper (optional dependency)
 try:
     from kohakuterrarium.builtins.inputs.whisper import WhisperASR, create_whisper_asr
@@ -102,4 +109,6 @@ __all__ = [
     # Implementations
     "CLIInput",
     "NonBlockingCLIInput",
+    "NoneInput",
+    "TUIInput",
 ]
