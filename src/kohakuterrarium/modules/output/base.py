@@ -55,6 +55,17 @@ class OutputModule(Protocol):
         """Called when agent finishes processing (after LLM generates)."""
         ...
 
+    def on_activity(self, activity_type: str, detail: str) -> None:
+        """
+        Called when tool/subagent activity occurs.
+
+        Args:
+            activity_type: "tool_start", "tool_done", "tool_error",
+                          "subagent_start", "subagent_done", "subagent_error"
+            detail: Human-readable detail string
+        """
+        ...
+
 
 class BaseOutputModule(ABC):
     """
@@ -109,4 +120,8 @@ class BaseOutputModule(ABC):
 
     async def on_processing_end(self) -> None:
         """Called when agent finishes processing. Default is no-op."""
+        pass
+
+    def on_activity(self, activity_type: str, detail: str) -> None:
+        """Called when tool/subagent activity occurs. Default is no-op."""
         pass
