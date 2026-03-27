@@ -219,3 +219,68 @@ def disable_colors() -> None:
     """Disable colored output (useful for logging to files)."""
     if _handler:
         _handler.setFormatter(ColoredFormatter(use_color=False))
+
+
+class TUILogHandler(logging.Handler):
+    """
+    Log handler that routes records to a TUI session's Logs tab.
+
+    Replaces the stderr handler when TUI mode is active so logs
+    don't interfere with the full-screen display.
+    """
+
+    def __init__(self, write_func: Any, level: int = logging.DEBUG):
+        super().__init__(level)
+        self._write_func = write_func
+        self.setFormatter(ColoredFormatter(use_color=False))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            self._write_func(msg)
+        except Exception:
+            pass  # Don't let logging errors crash the app
+
+
+_original_handler: logging.Handler | None = None
+
+
+def enable_tui_logging(write_func: Any) -> None:
+    """
+    Redirect all framework logs to a TUI write function.
+
+    Removes the stderr handler and installs a TUILogHandler
+    that calls write_func(formatted_message) for each record.
+
+    Args:
+        write_func: Callable that accepts a string (e.g., tui.write_log)
+    """
+    global _handler, _original_handler
+
+    root_logger = logging.getLogger("kohakuterrarium")
+
+    # Save and remove the stderr handler
+    if _handler:
+        _original_handler = _handler
+        root_logger.removeHandler(_handler)
+
+    # Install TUI handler
+    _handler = TUILogHandler(write_func)
+    root_logger.addHandler(_handler)
+
+
+def disable_tui_logging() -> None:
+    """Restore stderr logging after TUI mode ends."""
+    global _handler, _original_handler
+
+    root_logger = logging.getLogger("kohakuterrarium")
+
+    # Remove TUI handler
+    if _handler:
+        root_logger.removeHandler(_handler)
+
+    # Restore original stderr handler
+    if _original_handler:
+        _handler = _original_handler
+        root_logger.addHandler(_handler)
+        _original_handler = None
