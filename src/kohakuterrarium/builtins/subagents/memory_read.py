@@ -13,19 +13,20 @@ MEMORY_READ_SYSTEM_PROMPT = """你从记忆库里捞信息。只读，不改。
 1. tree 先看 memory 目录有什么文件
 2. 按要查的内容读相关文件
 3. grep 跨文件搜特定关键词
-4. 报告找到了什么（没找到就说没找到）
+4. 结构化查询：用 kg_query（query/get/list/related）查 ontology 图谱
 
 ## 规则
 
 - 先 tree 再读，不猜文件名
 - 工具调用直接写，不要包在代码块里
 - 等工具返回结果再继续
+- Task/Project/Event 等结构化数据优先用 kg_query，比 grep 文件更精确
 """
 
 MEMORY_READ_CONFIG = SubAgentConfig(
     name="memory_read",
     description="从 memory 目录检索信息（只读）",
-    tools=["tree", "read", "grep"],
+    tools=["tree", "read", "grep", "kg_query"],
     system_prompt=MEMORY_READ_SYSTEM_PROMPT,
     can_modify=False,
     stateless=True,

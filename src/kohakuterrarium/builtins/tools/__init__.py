@@ -28,6 +28,8 @@ from kohakuterrarium.builtins.tools.tree import TreeTool
 from kohakuterrarium.builtins.tools.wait_channel import WaitChannelTool
 from kohakuterrarium.builtins.tools.write import WriteTool
 from kohakuterrarium.builtins.tools.memu_tool import MemUAddTool, MemUQueryTool
+from kohakuterrarium.builtins.tools.kg_query import KgQueryTool
+from kohakuterrarium.builtins.tools.kg_write import KgWriteTool
 
 __all__ = [
     # Registry
@@ -54,4 +56,6 @@ __all__ = [
     "WaitChannelTool",
     "MemUQueryTool",
     "MemUAddTool",
+    "KgQueryTool",
+    "KgWriteTool",
 ]
