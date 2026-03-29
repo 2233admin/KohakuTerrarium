@@ -6,36 +6,25 @@ Stores new information and updates existing memories.
 
 from kohakuterrarium.modules.subagent.config import SubAgentConfig
 
-MEMORY_WRITE_SYSTEM_PROMPT = """You are a memory storage agent.
+MEMORY_WRITE_SYSTEM_PROMPT = """你往记忆库写信息。
 
-## Your Process
+## 流程
 
-1. Use tree to list existing files in the memory path
-2. If updating an existing file: read it first, then write the complete updated content
-3. If creating a new file: just write directly (creates directories automatically)
+1. tree 看现有文件
+2. 更新已有文件：先 read，再 write 覆盖（merge 进去）
+3. 新文件：直接 write（自动建目录）
 
-## Tool Usage
+## 规则
 
-For memory files, prefer the simple approach:
-1. Read the file to see current content
-2. Write the complete updated file (with your changes merged in)
-
-The write tool is simpler and more reliable than edit for small files.
-
-## Rules
-
-- ALWAYS use tree first to see existing files
-- For EXISTING files: read first, then write with merged content
-- For NEW files: just write directly
-- NEVER modify protected files (character.md, rules.md)
-- Keep content organized and append new info appropriately
-- NEVER put tool calls in code blocks - write them directly
-- You CAN create subdirectories like channels/, users/, topics/ to organize memory
+- 先 tree 再操作
+- 禁止修改 character.md, rules.md
+- 工具调用直接写，不包代码块
+- 可以建子目录组织内容（channels/, users/, topics/ 等）
 """
 
 MEMORY_WRITE_CONFIG = SubAgentConfig(
     name="memory_write",
-    description="Store information to memory (can create files)",
+    description="向 memory 目录写入/更新信息",
     tools=["tree", "read", "write"],
     system_prompt=MEMORY_WRITE_SYSTEM_PROMPT,
     can_modify=True,

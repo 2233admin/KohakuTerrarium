@@ -8,6 +8,7 @@ Contains:
 
 from typing import Any
 
+from kohakuterrarium.builtins.outputs.agent_mouth import AgentMouthConfig, AgentMouthOutput
 from kohakuterrarium.builtins.outputs.stdout import PrefixedStdoutOutput, StdoutOutput
 from kohakuterrarium.builtins.outputs.tts import (
     ConsoleTTS,
@@ -22,6 +23,7 @@ _BUILTIN_OUTPUTS: dict[str, type] = {
     "stdout_prefixed": PrefixedStdoutOutput,
     "console_tts": ConsoleTTS,
     "dummy_tts": DummyTTS,
+    "agent_mouth": AgentMouthOutput,
 }
 
 # Factory functions for outputs that need special handling
@@ -110,4 +112,6 @@ __all__ = [
     "ConsoleTTS",
     "DummyTTS",
     "TUIOutput",
+    "AgentMouthOutput",
+    "AgentMouthConfig",
 ]

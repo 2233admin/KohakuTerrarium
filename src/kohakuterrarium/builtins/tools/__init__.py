@@ -27,6 +27,7 @@ from kohakuterrarium.builtins.tools.think import ThinkTool
 from kohakuterrarium.builtins.tools.tree import TreeTool
 from kohakuterrarium.builtins.tools.wait_channel import WaitChannelTool
 from kohakuterrarium.builtins.tools.write import WriteTool
+from kohakuterrarium.builtins.tools.memu_tool import MemUAddTool, MemUQueryTool
 
 __all__ = [
     # Registry
@@ -51,4 +52,6 @@ __all__ = [
     "ThinkTool",
     "TreeTool",
     "WaitChannelTool",
+    "MemUQueryTool",
+    "MemUAddTool",
 ]
