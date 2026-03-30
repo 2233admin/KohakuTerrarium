@@ -1,0 +1,76 @@
+# Claw SWE Agent — 接入 claw-router:3456，中文 + 克劳德同志风格
+# 替换 swe_agent 的 OpenRouter 依赖
+
+name: claw_swe
+version: "1.0"
+
+# LLM 配置 — 走本地 claw-router (LiteLLM 网关, 兼容 OpenAI API)
+controller:
+  model: "${CLAW_MODEL:claude-sonnet-4-6}"
+  temperature: 0.7
+  max_tokens: 32768
+  api_key_env: CLAW_API_KEY
+  base_url: "${CLAW_BASE_URL:http://localhost:3456/v1}"
+
+system_prompt_file: prompts/system.md
+
+# 用户输入
+input:
+  type: cli
+  prompt: "同志: "
+
+# 工具清单
+tools:
+  - name: bash
+    type: builtin
+  - name: python
+    type: builtin
+  - name: read
+    type: builtin
+  - name: write
+    type: builtin
+  - name: edit
+    type: builtin
+  - name: glob
+    type: builtin
+  - name: grep
+    type: builtin
+  - name: think
+    type: builtin
+  - name: scratchpad
+    type: builtin
+  - name: ask_user
+    type: builtin
+  - name: memu_query
+    type: builtin
+  - name: memu_add
+    type: builtin
+
+# 子 agent
+subagents:
+  - name: explore
+    type: builtin
+  - name: plan
+    type: builtin
+  - name: worker
+    type: builtin
+  - name: critic
+    type: builtin
+  - name: summarize
+    type: builtin
+
+# 终止条件
+termination:
+  max_turns: 100
+  keywords: ["TASK_COMPLETE"]
+
+# 输出 — 支持 AgentMouth TTS（可选）
+output:
+  type: stdout
+  controller_direct: true
+  # 取消注释启用 TTS 播报:
+  # named_outputs:
+  #   tts:
+  #     type: agent_mouth
+  #     options:
+  #       voice: default
