@@ -44,6 +44,18 @@ def register_builtin(name: str) -> Callable[[type[T]], type[T]]:
     return decorator
 
 
+_TERRARIUM_TOOLS_LOADED = False
+
+
+def _ensure_terrarium_tools() -> None:
+    """Load terrarium tools on first request (avoids circular import at init)."""
+    global _TERRARIUM_TOOLS_LOADED
+    if _TERRARIUM_TOOLS_LOADED:
+        return
+    _TERRARIUM_TOOLS_LOADED = True
+    import kohakuterrarium.builtins.tools.terrarium_tools  # noqa: F401
+
+
 def get_builtin_tool(name: str) -> "BaseTool | None":
     """
     Get an instance of a built-in tool by name.
@@ -55,6 +67,9 @@ def get_builtin_tool(name: str) -> "BaseTool | None":
         Tool instance or None if not found
     """
     tool_cls = _BUILTIN_TOOLS.get(name)
+    if tool_cls is None and name.startswith(("terrarium_", "creature_")):
+        _ensure_terrarium_tools()
+        tool_cls = _BUILTIN_TOOLS.get(name)
     if tool_cls:
         return tool_cls()
     return None

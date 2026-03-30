@@ -9,91 +9,29 @@ import asyncio
 from typing import Any
 from uuid import uuid4
 
+from kohakuterrarium.builtins.inputs.none import NoneInput
+from kohakuterrarium.terrarium.tool_manager import (
+    TERRARIUM_MANAGER_KEY,
+    TerrariumToolManager,
+)
 from kohakuterrarium.core.agent import Agent
 from kohakuterrarium.core.config import load_agent_config
 from kohakuterrarium.core.environment import Environment
 from kohakuterrarium.core.session import Session
-from kohakuterrarium.terrarium.config import CreatureConfig, TerrariumConfig
+from kohakuterrarium.modules.trigger.channel import ChannelTrigger
+from kohakuterrarium.terrarium.api import TerrariumAPI
+from kohakuterrarium.terrarium.config import (
+    CreatureConfig,
+    TerrariumConfig,
+    build_channel_topology_prompt,
+)
 from kohakuterrarium.terrarium.creature import CreatureHandle
 from kohakuterrarium.terrarium.hotplug import HotPlugMixin
+from kohakuterrarium.terrarium.observer import ChannelObserver
 from kohakuterrarium.terrarium.output_log import OutputLogCapture
 from kohakuterrarium.utils.logging import get_logger
-from kohakuterrarium.builtins.inputs.none import NoneInput
-from kohakuterrarium.modules.trigger.channel import ChannelTrigger
 
 logger = get_logger(__name__)
-
-
-def _build_channel_topology_prompt(
-    config: TerrariumConfig,
-    creature: CreatureConfig,
-) -> str:
-    """
-    Build a prompt section describing channel topology and semantics.
-
-    Teaches the creature:
-    - How channels work (messages vs requests)
-    - Which channels it listens on and sends to
-    - The difference between queue and broadcast
-    - That receiving a message does NOT require a reply
-    """
-    ch_by_name: dict[str, Any] = {}
-    for ch in config.channels:
-        ch_by_name[ch.name] = ch
-
-    relevant_names: set[str] = set()
-    relevant_names.update(creature.listen_channels)
-    relevant_names.update(creature.send_channels)
-    for ch in config.channels:
-        if ch.channel_type == "broadcast":
-            relevant_names.add(ch.name)
-
-    if not relevant_names:
-        return ""
-
-    listen_set = set(creature.listen_channels)
-    send_set = set(creature.send_channels)
-
-    lines: list[str] = [
-        "## Team Communication",
-        "",
-        "You are part of a multi-agent team. You communicate through channels.",
-        "",
-        "IMPORTANT - How channels work:",
-        "- Messages arrive on your channels automatically. A message is INFORMATION, not a request.",
-        "- Receiving a message does NOT mean you must reply or send a message back.",
-        "- Only send a message when YOUR WORKFLOW requires it (e.g. sending your output to the next agent).",
-        "- Queue channels deliver to one recipient. Broadcast channels deliver to all team members.",
-        "- After you complete your task and output your termination keyword, you are DONE. Do not process further messages.",
-        "",
-        "### Your Channels",
-        "",
-    ]
-
-    for ch_name in sorted(relevant_names):
-        ch_cfg = ch_by_name.get(ch_name)
-        if ch_cfg is None:
-            continue
-
-        desc = f" - {ch_cfg.description}" if ch_cfg.description else ""
-        roles: list[str] = []
-        if ch_name in listen_set:
-            roles.append("listen")
-        if ch_name in send_set:
-            roles.append("send")
-        role_str = f" ({', '.join(roles)})" if roles else ""
-
-        lines.append(f"- `{ch_name}` [{ch_cfg.channel_type}]{role_str}{desc}")
-
-    lines.append("")
-
-    # List other creatures for context
-    other_creatures = [c.name for c in config.creatures if c.name != creature.name]
-    if other_creatures:
-        lines.append(f"### Team Members: {', '.join(other_creatures)}")
-        lines.append("")
-
-    return "\n".join(lines)
 
 
 class TerrariumRuntime(HotPlugMixin):
@@ -123,26 +61,23 @@ class TerrariumRuntime(HotPlugMixin):
         self._session: Session | None = None  # kept for backward compat
         self._running = False
         self._creature_tasks: list[asyncio.Task] = []
+        self._root_agent: Agent | None = None
 
     # ------------------------------------------------------------------
     # Lazy-initialized API / observer
     # ------------------------------------------------------------------
 
     @property
-    def api(self) -> "TerrariumAPI":
+    def api(self) -> TerrariumAPI:
         """Get the programmatic API for this runtime."""
         if not hasattr(self, "_api"):
-            from kohakuterrarium.terrarium.api import TerrariumAPI
-
             self._api = TerrariumAPI(self)
         return self._api
 
     @property
-    def observer(self) -> "ChannelObserver":
+    def observer(self) -> ChannelObserver:
         """Get the channel observer."""
         if not hasattr(self, "_observer"):
-            from kohakuterrarium.terrarium.observer import ChannelObserver
-
             if self._session is None:
                 raise RuntimeError("Cannot create observer before terrarium is started")
             self._observer = ChannelObserver(self._session)
@@ -198,11 +133,18 @@ class TerrariumRuntime(HotPlugMixin):
             await handle.agent.start()
             logger.info("Creature started", creature=handle.name)
 
+        # 5. Build root agent if configured (OUTSIDE the terrarium)
+        if self.config.root:
+            self._root_agent = self._build_root_agent()
+            await self._root_agent.start()
+            logger.info("Root agent started", config=self.config.root.config_path)
+
         self._running = True
         logger.info(
             "Terrarium started",
             terrarium_name=self.config.name,
             creatures=len(self._creatures),
+            has_root=self._root_agent is not None,
         )
 
     async def stop(self) -> None:
@@ -219,6 +161,15 @@ class TerrariumRuntime(HotPlugMixin):
         if self._creature_tasks:
             await asyncio.gather(*self._creature_tasks, return_exceptions=True)
         self._creature_tasks.clear()
+
+        # Stop root agent first (it's the user-facing side)
+        if self._root_agent is not None:
+            try:
+                self._root_agent._running = False
+                await self._root_agent.stop()
+                logger.info("Root agent stopped")
+            except Exception as exc:
+                logger.error("Error stopping root agent", error=str(exc))
 
         # Stop each creature agent
         for handle in self._creatures.values():
@@ -242,7 +193,7 @@ class TerrariumRuntime(HotPlugMixin):
         await self.start()
 
         try:
-            # Fire startup triggers and run agents concurrently
+            # Fire startup triggers and run creature event loops
             for handle in self._creatures.values():
                 task = asyncio.create_task(
                     self._run_creature(handle),
@@ -250,8 +201,17 @@ class TerrariumRuntime(HotPlugMixin):
                 )
                 self._creature_tasks.append(task)
 
-            # Wait until all creature tasks are done
-            await asyncio.gather(*self._creature_tasks, return_exceptions=True)
+            # If root agent is present, run it as the user-facing loop
+            if self._root_agent is not None:
+                root_task = asyncio.create_task(
+                    self._root_agent.run(),
+                    name="root_agent",
+                )
+                # Root agent is the primary: when user exits root, stop everything
+                await root_task
+            else:
+                # No root: wait for all creature tasks
+                await asyncio.gather(*self._creature_tasks, return_exceptions=True)
         except KeyboardInterrupt:
             logger.info("Terrarium interrupted")
         except asyncio.CancelledError:
@@ -286,6 +246,94 @@ class TerrariumRuntime(HotPlugMixin):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _build_root_agent(self) -> Agent:
+        """
+        Build the root agent OUTSIDE the terrarium.
+
+        The root agent:
+        - Loads from its own creature config (e.g. creatures/root)
+        - Gets a TerrariumToolManager pre-bound to this runtime
+        - Has its own I/O (cli/tui) for user interaction
+        - Is NOT a peer of terrarium creatures
+        """
+        root_cfg = self.config.root
+        assert root_cfg is not None
+
+        logger.info(
+            "Building root agent",
+            config_path=root_cfg.config_path,
+            interface=root_cfg.interface,
+        )
+
+        # Load root agent config
+        agent_config = load_agent_config(root_cfg.config_path)
+
+        # Create a separate environment for the root agent
+        # with a TerrariumToolManager pre-bound to this runtime
+        root_env = Environment(env_id=f"root_{self.environment.env_id}")
+        manager = TerrariumToolManager()
+        manager.register_runtime(self.config.name, self)
+        root_env.register(TERRARIUM_MANAGER_KEY, manager)
+
+        root_session = root_env.get_session("root")
+
+        agent = Agent(
+            agent_config,
+            session=root_session,
+            environment=root_env,
+        )
+
+        # Force-add all terrarium tools regardless of creature config
+        self._force_register_terrarium_tools(agent)
+
+        # Inject terrarium awareness into root's system prompt
+        awareness = self._build_root_awareness_prompt()
+        self._inject_prompt_section(agent, awareness)
+
+        return agent
+
+    @staticmethod
+    def _force_register_terrarium_tools(agent: Agent) -> None:
+        """Force-register all terrarium management tools on the root agent."""
+        from kohakuterrarium.builtins.tools.registry import get_builtin_tool
+
+        terrarium_tool_names = [
+            "terrarium_create",
+            "terrarium_status",
+            "terrarium_stop",
+            "terrarium_send",
+            "terrarium_observe",
+            "creature_start",
+            "creature_stop",
+        ]
+        for name in terrarium_tool_names:
+            if agent.registry.get_tool(name) is None:
+                tool = get_builtin_tool(name)
+                if tool:
+                    agent.registry.register_tool(tool)
+                    agent.executor.register_tool(tool)
+                    logger.debug("Force-registered terrarium tool", tool_name=name)
+
+    def _build_root_awareness_prompt(self) -> str:
+        """Build prompt section telling root about the bound terrarium."""
+        creature_names = [c.name for c in self.config.creatures]
+        channel_lines: list[str] = []
+        for ch in self.config.channels:
+            desc = f" - {ch.description}" if ch.description else ""
+            channel_lines.append(f"- `{ch.name}` ({ch.channel_type}){desc}")
+
+        return (
+            f"## Bound Terrarium: {self.config.name}\n"
+            f"\n"
+            f"You are managing this terrarium. Use terrarium_id='{self.config.name}' "
+            f"for all terrarium tool calls.\n"
+            f"\n"
+            f"### Creatures\n"
+            f"{', '.join(creature_names)}\n"
+            f"\n"
+            f"### Channels\n" + "\n".join(channel_lines)
+        )
 
     def _build_creature(self, creature_cfg: CreatureConfig) -> CreatureHandle:
         """
@@ -344,7 +392,7 @@ class TerrariumRuntime(HotPlugMixin):
             )
 
         # -- Inject channel topology into the system prompt --
-        topology_prompt = _build_channel_topology_prompt(self.config, creature_cfg)
+        topology_prompt = build_channel_topology_prompt(self.config, creature_cfg)
         if topology_prompt:
             self._inject_prompt_section(agent, topology_prompt)
 

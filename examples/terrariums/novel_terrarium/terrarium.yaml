@@ -4,8 +4,8 @@
 #   + team_chat broadcast for shared awareness
 #
 # Usage:
-#   python -m kohakuterrarium terrarium run agents/novel_terrarium/ --seed "A story about a lighthouse keeper"
-#   python -m kohakuterrarium terrarium run agents/novel_terrarium/   (interactive prompt)
+#   kt terrarium run agents/novel_terrarium/ --seed "A story about a lighthouse keeper"
+#   kt terrarium run agents/novel_terrarium/   (interactive prompt)
 
 terrarium:
   name: novel_writer

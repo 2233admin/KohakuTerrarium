@@ -4,7 +4,10 @@ import argparse
 import asyncio
 from pathlib import Path
 
-from kohakuterrarium.utils.logging import get_logger
+from kohakuterrarium.terrarium.config import load_terrarium_config
+from kohakuterrarium.terrarium.observer import ChannelObserver
+from kohakuterrarium.terrarium.runtime import TerrariumRuntime
+from kohakuterrarium.utils.logging import get_logger, set_level
 
 logger = get_logger(__name__)
 
@@ -64,9 +67,6 @@ def handle_terrarium_command(args: argparse.Namespace) -> int:
 
 def _run_terrarium_cli(args: argparse.Namespace) -> int:
     """Run a terrarium from CLI."""
-    from kohakuterrarium.terrarium import TerrariumRuntime, load_terrarium_config
-    from kohakuterrarium.utils.logging import set_level
-
     set_level(args.log_level)
 
     path = Path(args.terrarium_path)
@@ -83,8 +83,29 @@ def _run_terrarium_cli(args: argparse.Namespace) -> int:
     print(f"Terrarium: {config.name}")
     print(f"Creatures: {[c.name for c in config.creatures]}")
     print(f"Channels: {[c.name for c in config.channels]}")
+    if config.root:
+        print(f"Root agent: {config.root.config_path} ({config.root.interface})")
 
-    # Prompt for seed if not provided and seed channel exists
+    # When root agent is configured, it handles all user interaction
+    if config.root:
+        print()
+
+        async def _run_with_root() -> None:
+            runtime = TerrariumRuntime(config)
+            # runtime.run() handles root agent + creatures concurrently
+            await runtime.run()
+
+        try:
+            asyncio.run(_run_with_root())
+            return 0
+        except KeyboardInterrupt:
+            print("\nInterrupted")
+            return 0
+        except Exception as e:
+            print(f"Error: {e}")
+            return 1
+
+    # No root agent: basic seed/observe CLI
     seed_prompt = args.seed
     seed_channel = args.seed_channel
     has_seed_channel = any(c.name == seed_channel for c in config.channels)
@@ -112,9 +133,7 @@ def _run_terrarium_cli(args: argparse.Namespace) -> int:
 
         # Inject seed prompt
         if seed_prompt and has_seed_channel:
-            await runtime.api.send_to_channel(
-                seed_channel, seed_prompt, sender="human"
-            )
+            await runtime.api.send_to_channel(seed_channel, seed_prompt, sender="human")
             print(f"  Seed sent to '{seed_channel}' channel")
             print()
 
@@ -147,8 +166,6 @@ def _run_terrarium_cli(args: argparse.Namespace) -> int:
 
 async def _setup_observer(runtime, args, config):
     """Setup channel observer and return it."""
-    from kohakuterrarium.terrarium.observer import ChannelObserver
-
     observer = ChannelObserver(runtime._session)
 
     def print_message(msg):
@@ -177,8 +194,6 @@ async def _setup_observer(runtime, args, config):
 
 def _info_terrarium_cli(args: argparse.Namespace) -> int:
     """Show terrarium information."""
-    from kohakuterrarium.terrarium import load_terrarium_config
-
     path = Path(args.terrarium_path)
     if not path.exists():
         print(f"Error: Path not found: {args.terrarium_path}")

@@ -10,9 +10,13 @@ from __future__ import annotations
 import asyncio
 
 from kohakuterrarium.core.channel import BaseChannel
-from kohakuterrarium.terrarium.config import ChannelConfig, CreatureConfig
-from kohakuterrarium.terrarium.creature import CreatureHandle
 from kohakuterrarium.modules.trigger.channel import ChannelTrigger
+from kohakuterrarium.terrarium.config import (
+    ChannelConfig,
+    CreatureConfig,
+    build_channel_topology_prompt,
+)
+from kohakuterrarium.terrarium.creature import CreatureHandle
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -149,9 +153,6 @@ class HotPlugMixin:
         Raises:
             ValueError: If creature not found or invalid direction
         """
-        # Import here to avoid circular reference at module level
-        from kohakuterrarium.terrarium.runtime import _build_channel_topology_prompt
-
         handle = self._creatures.get(creature_name)
         if handle is None:
             raise ValueError(f"Creature not found: {creature_name}")
@@ -195,7 +196,7 @@ class HotPlugMixin:
             handle.send_channels.append(channel_name)
 
             # Update topology in system prompt
-            topology = _build_channel_topology_prompt(self.config, handle.config)
+            topology = build_channel_topology_prompt(self.config, handle.config)
             handle.agent.update_system_prompt(topology)
 
             logger.info(
