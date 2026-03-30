@@ -1,0 +1,30 @@
+# SWE Team with Root Agent (TUI)
+# The root agent runs with TUI interface and can create/manage
+# the SWE team terrarium on demand via terrarium tools.
+#
+# Usage:
+#   python -m kohakuterrarium run terrariums/swe_team_managed_tui/
+#
+# The user talks to the root agent. The root agent:
+# 1. Creates terrariums/swe_team as a team
+# 2. Injects tasks via terrarium_send
+# 3. Monitors via terrarium_observe
+# 4. Reports results back to the user
+
+name: swe_team_tui
+version: "1.0"
+base_config: creatures/root
+
+controller:
+  model: "${OPENROUTER_MODEL:google/gemini-3-flash-preview}"
+  api_key_env: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1
+  tool_format: native
+
+input:
+  type: tui
+  prompt: "You: "
+
+output:
+  type: tui
+  controller_direct: true

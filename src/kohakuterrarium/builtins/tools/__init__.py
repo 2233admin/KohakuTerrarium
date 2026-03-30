@@ -23,6 +23,15 @@ from kohakuterrarium.builtins.tools.json_write import JsonWriteTool
 from kohakuterrarium.builtins.tools.read import ReadTool
 from kohakuterrarium.builtins.tools.scratchpad_tool import ScratchpadTool
 from kohakuterrarium.builtins.tools.send_message import SendMessageTool
+from kohakuterrarium.builtins.tools.terrarium_tools import (
+    CreatureStartTool,
+    CreatureStopTool,
+    TerrariumCreateTool,
+    TerrariumObserveTool,
+    TerrariumSendTool,
+    TerrariumStatusTool,
+    TerrariumStopTool,
+)
 from kohakuterrarium.builtins.tools.think import ThinkTool
 from kohakuterrarium.builtins.tools.tree import TreeTool
 from kohakuterrarium.builtins.tools.wait_channel import WaitChannelTool
@@ -41,6 +50,13 @@ __all__ = [
     "ReadTool",
     "ScratchpadTool",
     "SendMessageTool",
+    "TerrariumCreateTool",
+    "TerrariumStatusTool",
+    "TerrariumStopTool",
+    "TerrariumSendTool",
+    "TerrariumObserveTool",
+    "CreatureStartTool",
+    "CreatureStopTool",
     "WriteTool",
     "EditTool",
     "GlobTool",

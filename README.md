@@ -1,38 +1,124 @@
 # KohakuTerrarium
 
-**A universal agent framework with peer-to-peer multi-agent orchestration.**
+**A universal agent framework and ready-to-use agent application.**
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)
 
 ---
 
-KohakuTerrarium is a Python framework for building any kind of agent: coding assistants, conversational AI, monitoring drones, multi-agent teams. It provides **two levels of agent composition**:
+KohakuTerrarium is both a **framework** for building any kind of agent system and an **application** that ships with pre-built agents and multi-agent teams ready to use out of the box.
 
-1. **Creature** - a self-contained agent with its own LLM, tools, sub-agents, and memory. Handles task decomposition internally via hierarchical sub-agents.
-2. **Terrarium** - a runtime that wires multiple standalone creatures together via channels for peer-to-peer collaboration. No creature is special. The terrarium is pure wiring, not intelligence.
+## Two Levels of Composition
+
+1. **Creature** -- a self-contained agent with its own LLM, tools, sub-agents, and memory. Handles task decomposition internally via hierarchical sub-agents.
+2. **Terrarium** -- a runtime that wires multiple creatures together via channels for peer-to-peer collaboration. Pure wiring, no intelligence. Creatures don't know they're in a terrarium.
 
 Build agents individually, test them standalone, then place them in a terrarium to collaborate.
 
-## Key Features
+## Philosophy
 
-### Agent Framework (Creature)
-- **Any agent type** - SWE agents, chatbots, autonomous monitors, multi-agent coordinators
-- **Async-first execution** - tools start during LLM streaming, run in parallel via `asyncio`
-- **Nested sub-agents** - full agents with their own LLM, tools, and lifecycle
-- **Native + custom tool calling** - OpenAI function calling API, or configurable text formats (bracket, XML)
-- **YAML-driven config** - define agents declaratively, minimal code required
-- **16 built-in tools** - bash, read, write, edit, glob, grep, http, think, scratchpad, and more
-- **10 built-in sub-agents** - explore, plan, worker, critic, summarize, research, coordinator, and more
-- **Trigger system** - timers, channel events for autonomous operation
+- **Framework + Application**: not just a library to build agents, but a product with powerful defaults. `kt run` gives you a capable agent immediately.
+- **Creature inheritance**: 6 pre-built creature templates (general, swe, reviewer, ops, researcher, root). Extend any of them with a 5-line YAML config.
+- **Terrarium-oriented design**: the multi-agent team is the primary visual metaphor. UI, TUI, and API are all designed around terrarium visibility -- topology graphs, channel streams, creature status.
+- **Progressive disclosure**: one-line tool descriptions always visible, full documentation loaded on demand via the `info` tool, runtime hints in tool responses.
+- **The root agent bridge**: a root agent with terrarium management tools lets users control multi-agent teams through natural language. No YAML required for end users.
 
-### Multi-Agent Orchestration (Terrarium)
-- **Peer-to-peer channels** - queue (point-to-point) and broadcast (all subscribers) channel types
-- **Zero-modification wiring** - standalone creatures work in a terrarium without config changes
-- **Trigger-based receiving** - channel messages arrive automatically as events, no polling
-- **Explicit sending** - creatures decide what to communicate via `send_message`
-- **Topology-aware prompts** - system prompt auto-injects channel info with descriptions
-- **Lifecycle management** - start, stop, monitor all creatures from one runtime
+## Pre-Built Creatures
+
+All creatures inherit from `general` and add domain-specific behavior:
+
+| Creature | Domain | Key Additions |
+|----------|--------|---------------|
+| **general** | Foundation | 16 tools, 6 sub-agents, core personality |
+| **swe** | Software engineering | Coding workflow, git safety, validation |
+| **reviewer** | Code review | Severity levels, structured findings, verdict |
+| **ops** | Infrastructure | CI/CD, deployment, monitoring, cloud |
+| **researcher** | Research | Source evaluation, citations, methodology |
+| **root** | Orchestration | 7 terrarium management tools, delegation |
+
+### Creature Inheritance
+
+```yaml
+# A complete agent in 5 lines
+name: my_agent
+base_config: creatures/swe
+controller:
+  model: "google/gemini-3-flash-preview"
+  api_key_env: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1
+  tool_format: native
+input: { type: cli }
+output: { type: stdout, controller_direct: true }
+```
+
+Tools extend, prompts concatenate, scalars override. See [Creatures Guide](docs/guide/creatures.md).
+
+## Pre-Built Terrariums
+
+| Terrarium | Creatures | Topology |
+|-----------|-----------|----------|
+| **swe_team** | swe + reviewer | Task -> implement -> review -> feedback loop |
+| **swe_team_managed** | root + swe + reviewer | Root agent orchestrates the team |
+| **swe_team_managed_tui** | Root agent (TUI) | TUI interface, creates teams on demand |
+
+## Quick Start
+
+```bash
+git clone https://github.com/KohakuBlueLeaf/KohakuTerrarium.git
+cd KohakuTerrarium
+uv pip install -e .
+export OPENROUTER_API_KEY=your_key_here
+```
+
+### Run a Single Agent
+
+```bash
+python -m kohakuterrarium run examples/agent-apps/swe_agent
+python -m kohakuterrarium run examples/agent-apps/swe_agent_tui  # TUI mode
+```
+
+### Run a Terrarium
+
+```bash
+python -m kohakuterrarium terrarium run terrariums/swe_team/
+python -m kohakuterrarium terrarium run terrariums/swe_team/ --observe tasks review results
+
+# Root agent manages the team via TUI
+python -m kohakuterrarium run terrariums/swe_team_managed_tui/
+```
+
+### Programmatic Usage
+
+```python
+import asyncio
+from kohakuterrarium.core.agent import Agent
+
+async def main() -> None:
+    agent = Agent.from_path("examples/agent-apps/swe_agent")
+    await agent.run()
+
+asyncio.run(main())
+```
+
+```python
+from kohakuterrarium.terrarium.config import load_terrarium_config
+from kohakuterrarium.terrarium.runtime import TerrariumRuntime
+
+async def main() -> None:
+    config = load_terrarium_config("terrariums/swe_team")
+    runtime = TerrariumRuntime(config)
+    await runtime.run()
+
+asyncio.run(main())
+```
+
+### HTTP API
+
+```bash
+python apps/api/main.py
+# 18 REST + 2 WebSocket endpoints at http://localhost:8000/docs
+```
 
 ## Architecture
 
@@ -48,137 +134,17 @@ Trigger -------+           |            <----> Sub-Agents (nested LLMs)
                   Output      Channels ----> Other Agents
 ```
 
-| System | Role |
-|--------|------|
-| **Input** | User requests, chat messages, ASR streams, TUI, or none (trigger-only) |
-| **Trigger** | Timers, channel events for autonomous operation |
-| **Controller** | LLM orchestrator that dispatches tasks and makes decisions |
-| **Tool Calling** | Background parallel execution of tools and sub-agents |
-| **Output** | Streaming to stdout, files, TTS, APIs, webhooks |
-
 ### Terrarium (Multi-Agent)
-
-```
-+-------------+     +-------------------+     +-----------------+
-|  Creatures  |     |  Terrarium Layer  |     | Human Interface |
-|  (opaque)   |<--->|  (wiring)         |<--->| (pluggable)     |
-|             |     |                   |     |                 |
-| - architect |     | - channel system  |     | - CLI           |
-| - swe_agent |     | - trigger wiring  |     | - API           |
-| - reviewer  |     | - lifecycle mgmt  |     | - Web UI        |
-| - any other |     | - prompt injection|     | - none (auto)   |
-+-------------+     +-------------------+     +-----------------+
-```
-
-Two channel types support any topology:
 
 ```
 Queue (point-to-point):          Broadcast (group chat):
 
   A --[tasks]--> B               A --+
-  B --[results]--> A              B --+--> [discussion] --> all subscribers
+  B --[results]--> A              B --+--> [team_chat] --> all
                                   C --+
-
-Pipeline:                        Hub-and-spoke:
-
-  research --> plan --> implement     architect --[tasks]--> worker_1
-      ^                    |         architect --[tasks]--> worker_2
-      +----[feedback]------+         worker_* --[results]--> architect
 ```
 
-| Concept | Role |
-|---------|------|
-| **Creature** | Opaque, self-contained agent (microservice analogy) |
-| **Queue channel** | Point-to-point: one consumer per message (task dispatch, pipelines) |
-| **Broadcast channel** | Group chat: all subscribers see every message (shared awareness) |
-| **Terrarium** | Pure wiring: channels, triggers, lifecycle. No intelligence |
-| **Human Interface** | CLI, API, or Web UI. Pluggable, optional |
-
-## Quick Start
-
-### Run a Single Agent
-
-```bash
-git clone https://github.com/KohakuBlueLeaf/KohakuTerrarium.git
-cd KohakuTerrarium
-uv pip install -e .
-
-export OPENROUTER_API_KEY=your_key_here
-
-# Run the SWE agent
-python -m kohakuterrarium run agents/swe_agent
-
-# Run the SWE agent (TUI mode)
-python -m kohakuterrarium run agents/swe_agent_tui
-```
-
-### Run a Terrarium
-
-```bash
-# Run the novel writer terrarium (3 creatures collaborating)
-python -m kohakuterrarium terrarium run agents/novel_terrarium/
-
-# With channel observation (see messages flow between creatures)
-python -m kohakuterrarium terrarium run agents/novel_terrarium/ --observe ideas outline draft
-
-# Show terrarium info
-python -m kohakuterrarium terrarium info agents/novel_terrarium/
-```
-
-### Start the HTTP API
-
-```bash
-# Start the API server
-python apps/api/main.py
-# Open http://localhost:8000/docs for API documentation
-```
-
-### Programmatic Usage
-
-```python
-import asyncio
-from kohakuterrarium.core.agent import Agent
-
-async def main():
-    agent = Agent.from_path("agents/swe_agent")
-    await agent.run()  # Interactive CLI loop
-
-asyncio.run(main())
-```
-
-### Programmatic Terrarium
-
-```python
-import asyncio
-from kohakuterrarium.terrarium import TerrariumRuntime, load_terrarium_config
-
-async def main():
-    config = load_terrarium_config("agents/novel_terrarium")
-    runtime = TerrariumRuntime(config)
-    await runtime.run()  # All creatures run concurrently
-
-asyncio.run(main())
-```
-
-### Programmatic Control
-
-```python
-async def main():
-    agent = Agent.from_path("agents/swe_agent")
-    await agent.start()
-
-    await agent.inject_input("Create a hello world script")
-    agent.set_output_handler(lambda text: print(f"AI: {text}"))
-
-    print(agent.tools)       # ['bash', 'read', 'write', ...]
-    print(agent.subagents)   # ['explore', 'plan', 'worker', ...]
-
-    await agent.stop()
-```
-
-Agents can also be embedded in web servers (FastAPI, etc.) - see [Configuration Reference](docs/guides/configuration.md) for details.
-
-## Built-in Tools (16)
+## Built-in Tools (23)
 
 | Tool | Description | Tool | Description |
 |------|-------------|------|-------------|
@@ -190,6 +156,10 @@ Agents can also be embedded in web servers (FastAPI, etc.) - see [Configuration 
 | `glob` | Find files by pattern | `ask_user` | Prompt user for input |
 | `grep` | Regex search in files | `json_read` | Query JSON files |
 | `tree` | Directory structure | `json_write` | Modify JSON files |
+| `info` | Load tool/sub-agent docs | `terrarium_create` | Create and start a terrarium |
+| `terrarium_status` | List/inspect terrariums | `terrarium_stop` | Stop a terrarium |
+| `terrarium_send` | Send to terrarium channel | `terrarium_observe` | Read channel messages |
+| `creature_start` | Hot-add creature | `creature_stop` | Remove creature |
 
 ## Built-in Sub-Agents (10)
 
@@ -201,70 +171,23 @@ Agents can also be embedded in web servers (FastAPI, etc.) - see [Configuration 
 | `critic` | Review and critique | `response` | Generate user responses |
 | `summarize` | Condense long content | `research` | Web + file research |
 
-## Examples
-
-### Terrariums (Multi-Agent)
-
-| Terrarium | Topology | Creatures |
-|-----------|----------|-----------|
-| [novel_terrarium](agents/novel_terrarium/) | Pipeline with feedback | brainstorm, planner, writer |
-
-### Novel Writer Terrarium
-
-Three creatures collaborate via queue channels (pipeline) + one broadcast channel (team awareness):
-
-```
-brainstorm --[ideas q]--> planner --[outline q]--> writer --[draft q]-->
-     ^                                               |
-     +------------------[feedback q]-----------------+
-                    [team_chat broadcast] --> all
-```
-
-```bash
-# Run it
-python -m kohakuterrarium terrarium run agents/novel_terrarium/ --observe ideas outline
-
-# See the config
-python -m kohakuterrarium terrarium info agents/novel_terrarium/
-```
-
-Output: 4 chapters + compiled `novel.md` in the working directory.
-
-### Agents (Single)
-
-| Agent | Pattern |
-|-------|---------|
-| [swe_agent](agents/swe_agent/) | SWE coding assistant with native tool calling |
-| [swe_agent_tui](agents/swe_agent_tui/) | SWE assistant with TUI interface |
-| [planner_agent](agents/planner_agent/) | Plan-execute-reflect loop |
-| [monitor_agent](agents/monitor_agent/) | Trigger-driven autonomous agent |
-
 ## Configuration
 
 ### Agent Config
 
 ```yaml
 name: my_agent
+base_config: creatures/swe          # Inherit from a creature
 controller:
   model: "google/gemini-3-flash-preview"
   api_key_env: OPENROUTER_API_KEY
   base_url: https://openrouter.ai/api/v1
-  tool_format: native    # native, bracket, xml, or custom dict
-
+  tool_format: native                # native, bracket, xml
 system_prompt_file: prompts/system.md
-
-input:
-  type: cli       # cli, tui, whisper, none (trigger-only), custom
-
+input: { type: cli }
 tools:
-  - name: bash
-    type: builtin
-  - name: read
-    type: builtin
-
-subagents:
-  - name: explore
-    type: builtin
+  - { name: bash, type: builtin }
+  - { name: my_tool, type: custom, module: ./tools/my_tool.py, class: MyTool }
 ```
 
 ### Terrarium Config
@@ -274,7 +197,7 @@ terrarium:
   name: my_team
   creatures:
     - name: researcher
-      config: ./creatures/researcher/
+      config: ../../creatures/researcher
       channels:
         listen: [tasks, team_chat]
         can_send: [findings, team_chat]
@@ -294,44 +217,46 @@ terrarium:
 
 ```
 src/kohakuterrarium/
-  core/        # Agent, controller, executor, events, channels, environment, session
+  core/        # Agent, controller, executor, events, channels, sessions
   modules/     # Protocols: input, trigger, tool, output, subagent
   terrarium/   # Multi-agent runtime: config, lifecycle, hot-plug, observer
-  serving/     # Service layer: KohakuManager, AgentSession, event streaming
-  builtins/    # 16 tools, 10 sub-agents, CLI/TUI/Whisper/None, stdout/TUI/TTS
+  serving/     # KohakuManager, AgentSession, event streaming
+  builtins/    # 23 tools, 10 sub-agents, CLI/TUI/Whisper inputs, stdout/TUI outputs
   parsing/     # Stream parser (bracket, XML, native tool calling)
   prompt/      # System prompt aggregation + Jinja2 templating
-  llm/         # LLM providers (OpenAI/OpenRouter) + native tool calling
+  llm/         # LLM providers (OpenAI/OpenRouter/Codex OAuth)
   testing/     # ScriptedLLM, OutputRecorder, TestAgentBuilder
   utils/       # Structured colored logging
 
-agents/        # Example agents and terrariums
-docs/          # Architecture, guides, terrarium docs
-apps/
-  api/         # FastAPI HTTP API (REST + WebSocket)
+creatures/     # Pre-built creature templates (general, swe, reviewer, ops, researcher, root)
+terrariums/    # Pre-built terrarium templates (swe_team, swe_team_managed)
+examples/      # Example agent apps, terrariums, and code samples
+apps/api/      # FastAPI HTTP API (REST + WebSocket)
+docs/          # Guide, concepts, architecture, API reference
 ```
-
-## Multi-Session Isolation
-
-KohakuTerrarium uses a two-level isolation system for safe multi-user operation:
-
-- **Environment** - shared state per terrarium (inter-creature channels, config)
-- **Session** - private state per creature (scratchpad, sub-agent channels)
-
-Multiple users in one process get separate environments. Creatures in the same terrarium share channels but have private scratchpads. See [Environment docs](docs/terrarium/environment.md).
 
 ## Documentation
 
-- [Architecture Overview](docs/architecture.md)
-- [Terrarium Guide](docs/terrarium/index.md)
-- [Terrarium Architecture](docs/terrarium/architecture.md)
-- [Terrarium Channels](docs/terrarium/channels.md)
-- [Environment-Session System](docs/terrarium/environment.md)
-- [Programmatic API](docs/terrarium/api.md)
-- [HTTP API Reference](docs/http-api.md)
-- [Serving Layer](docs/terrarium/serving.md)
-- [Configuration Reference](docs/guides/configuration.md)
-- [Testing Infrastructure](docs/testing.md)
+**Guide** (using the framework):
+- [Getting Started](docs/guide/getting-started.md)
+- [Configuration Reference](docs/guide/configuration.md)
+- [Creatures](docs/guide/creatures.md)
+- [Example Agents](docs/guide/example-agents.md)
+
+**Concepts**:
+- [Creatures and Agents](docs/concept/creature.md)
+- [Terrarium](docs/concept/terrarium.md)
+- [Channels](docs/concept/channels.md)
+- [Environment-Session](docs/concept/environment.md)
+- [Tool Formats](docs/concept/tool-formats.md)
+
+**Reference**:
+- [Python API](docs/api-reference/python.md)
+- [HTTP API](docs/api-reference/http.md)
+- [CLI](docs/api-reference/cli.md)
+
+**Contributing**:
+- [Testing](docs/develop/testing.md)
 - [Code Conventions](CLAUDE.md)
 
 ## License
