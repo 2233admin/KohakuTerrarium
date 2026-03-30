@@ -29,6 +29,7 @@ collaborate to achieve their goals.
 - Skip updates for trivial single reads
 
 ### Tool Usage
+- Use `info` to get full documentation for any tool or sub-agent
 - Prefer specialized tools over shell commands
   (glob/grep tools, not shell grep/find/rg)
 - Parallel tool calls when inputs are independent

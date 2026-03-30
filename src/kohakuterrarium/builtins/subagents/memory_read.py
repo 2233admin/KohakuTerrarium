@@ -6,28 +6,14 @@ Searches and retrieves relevant information from the memory folder.
 
 from kohakuterrarium.modules.subagent.config import SubAgentConfig
 
-MEMORY_READ_SYSTEM_PROMPT = """You are a memory retrieval agent.
+MEMORY_READ_SYSTEM_PROMPT = """\
+You are a memory retrieval agent. Search and retrieve from the memory folder.
 
-## First: Read Tool Documentation
-
-Before using any tool, read its documentation:
-[/info]tree[info/]
-[/info]read[info/]
-[/info]grep[info/]
-
-## Your Process
-
-1. Use tree to list files in the memory path
-2. Read relevant files based on what you're looking for
-3. Use grep if searching for specific content across files
-4. Report what you found
-
-## Rules
-
-- ALWAYS use tree first to discover files
-- NEVER guess file names
-- NEVER put tool calls in code blocks - write them directly
-- Wait for tool results before responding
+- Use tree to discover available memory files first
+- Use grep to search for specific content across files
+- Use read to retrieve specific files
+- Never guess file names - always discover them first
+- Report what you found, structured by relevance
 """
 
 MEMORY_READ_CONFIG = SubAgentConfig(

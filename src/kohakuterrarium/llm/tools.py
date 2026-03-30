@@ -121,6 +121,16 @@ _BUILTIN_SCHEMAS: dict[str, dict] = {
         },
         "required": ["channel"],
     },
+    "info": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Name of the tool or sub-agent to get documentation for",
+            },
+        },
+        "required": ["name"],
+    },
     "ask_user": {
         "type": "object",
         "properties": {
