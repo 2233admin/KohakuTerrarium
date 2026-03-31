@@ -124,13 +124,19 @@ Every creature automatically gets a direct channel named after it. The root agen
 ## The Root Agent Pattern
 
 ```
-User  <-->  Root Agent (creature with terrarium tools)
-                |
-                v  (sends tasks, observes results)
-           +-----------+
-           | Terrarium  |  <-- pure wiring, no intelligence
-           +-----------+
-           | swe | reviewer | ... |
+  ┌─────────┐       ┌───────────────────────────┐
+  │  User   │<─────>│        Root Agent         │
+  └─────────┘       │  (terrarium tools, TUI)   │
+                    └───────────────────────────┘
+                          │               ^
+            sends tasks   │               │  observes results
+                          v               │
+                    ┌───────────────────────────┐
+                    │     Terrarium Layer       │
+                    │   (pure wiring, no LLM)   │
+                    ├───────┬──────────┬────────┤
+                    │  swe  │ reviewer │  ....  │
+                    └───────┴──────────┴────────┘
 ```
 
 The root agent delegates work, watches for results, and reports back. It never does the work itself. Background tools (`terrarium_observe`) set up persistent channel subscriptions that fire as trigger events when messages arrive. The agent stays idle between events.
