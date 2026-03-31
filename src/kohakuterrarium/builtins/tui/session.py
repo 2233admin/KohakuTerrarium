@@ -232,16 +232,21 @@ class TUISession:
         self._assistant_buffer: list[str] = []
 
     def _safe_write(self, widget_id: str, content: Any) -> None:
-        """Safely write to a RichLog widget via Textual's thread-safe call."""
+        """Safely write to a RichLog widget.
+
+        Uses call_later (non-blocking, works from same event loop) with
+        fallback to call_from_thread (for background threads).
+        """
         if not self._app or not self._app.is_running:
             return
         try:
-            self._app.call_from_thread(self._do_write, widget_id, content)
+            # call_later works from the same asyncio loop as Textual
+            # (non-blocking, schedules the write on next Textual tick)
+            self._app.call_later(self._do_write, widget_id, content)
         except Exception:
-            # Fallback: try direct write (works if already on Textual thread)
             try:
-                widget = self._app.query_one(f"#{widget_id}", RichLog)
-                widget.write(content)
+                # Fallback: call_from_thread for background threads
+                self._app.call_from_thread(self._do_write, widget_id, content)
             except Exception:
                 pass
 

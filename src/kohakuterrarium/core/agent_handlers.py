@@ -333,6 +333,11 @@ class AgentHandlersMixin:
                 logger.debug("Pushing feedback to controller, continuing")
                 await controller.push_event(feedback_event)
 
+        # Flush any remaining buffered output before ending
+        await self.output_router.flush()
+        if hasattr(self.output_router.default_output, "reset"):
+            self.output_router.default_output.reset()
+
         # Notify output modules that processing has ended
         await self.output_router.on_processing_end()
 
