@@ -191,6 +191,11 @@ class AgentHandlersMixin:
                         job_id=job_id,
                         direct=is_direct,
                     )
+                    # Flush buffered LLM text so it renders before tool_start
+                    await self.output_router.flush()
+                    if hasattr(self.output_router.default_output, "reset"):
+                        self.output_router.default_output.reset()
+
                     # Notify output of tool activity with name[id] + arg preview
                     short_id = job_id.rsplit("_", 1)[-1][:6] if "_" in job_id else ""
                     label = (
@@ -212,6 +217,10 @@ class AgentHandlersMixin:
                     )
                 elif isinstance(parse_event, SubAgentCallEvent):
                     job_id = await self._start_subagent_async(parse_event)
+                    # Flush buffered LLM text before showing activity
+                    await self.output_router.flush()
+                    if hasattr(self.output_router.default_output, "reset"):
+                        self.output_router.default_output.reset()
                     # Notify output of sub-agent activity with name[id]
                     sa_short_id = job_id.rsplit("_", 1)[-1][:6] if "_" in job_id else ""
                     sa_label = (
