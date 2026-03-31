@@ -173,6 +173,7 @@ class AgentHandlersMixin:
                     if is_direct:
                         direct_tasks[job_id] = task
                         direct_job_ids.append(job_id)
+                        self._direct_job_ids.add(job_id)
                     else:
                         # Background: add placeholder so API sees a response
                         # for every tool call. Actual result comes later via
@@ -550,16 +551,22 @@ class AgentHandlersMixin:
                 await asyncio.sleep(1.0)  # Backoff on error
 
     def _on_bg_complete(self, event: TriggerEvent) -> None:
-        """Callback fired by executor when a background job completes.
+        """Callback fired by executor when ANY tool completes.
 
-        Shows completion in TUI, then processes the result and flushes
-        output. The processing lock ensures serialization.
+        Only handles BACKGROUND tools. Direct tools are tracked in
+        _direct_job_ids and handled by the processing loop.
         """
         if not self._running:
             return
 
-        # Show tool completion in TUI with job_id
         job_id = getattr(event, "job_id", "")
+
+        # Skip direct tools - they're awaited by the processing loop
+        if job_id in self._direct_job_ids:
+            self._direct_job_ids.discard(job_id)
+            return
+
+        # Background tool completed - show in TUI and process
         tool_name = job_id.rsplit("_", 1)[0] if "_" in job_id else job_id
         short_id = job_id.rsplit("_", 1)[-1][:6] if "_" in job_id else ""
         label = f"{tool_name}[{short_id}]" if short_id else tool_name
