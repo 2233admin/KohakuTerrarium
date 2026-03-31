@@ -134,11 +134,11 @@ class TerrariumRuntime(HotPlugMixin):
             logger.info("Creature started", creature=handle.name)
 
         # 5. Build root agent if configured (OUTSIDE the terrarium)
+        # Don't start it here - run() will call agent.run() which handles start
         if self.config.root:
             self._root_agent = self._build_root_agent()
-            await self._root_agent.start()
             logger.info(
-                "Root agent started",
+                "Root agent built",
                 base_config=self.config.root.config_data.get("base_config"),
             )
 
@@ -165,14 +165,9 @@ class TerrariumRuntime(HotPlugMixin):
             await asyncio.gather(*self._creature_tasks, return_exceptions=True)
         self._creature_tasks.clear()
 
-        # Stop root agent first (it's the user-facing side)
+        # Signal root agent to exit (its own run() handles cleanup)
         if self._root_agent is not None:
-            try:
-                self._root_agent._running = False
-                await self._root_agent.stop()
-                logger.info("Root agent stopped")
-            except Exception as exc:
-                logger.error("Error stopping root agent", error=str(exc))
+            self._root_agent._running = False
 
         # Stop each creature agent
         for handle in self._creatures.values():
