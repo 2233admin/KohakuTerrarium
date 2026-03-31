@@ -106,7 +106,7 @@ class TerrariumRuntime(HotPlugMixin):
 
         logger.info("Starting terrarium", terrarium_name=self.config.name)
 
-        # 1. Pre-create shared channels in the environment
+        # 1a. Pre-create shared channels from config
         for ch_cfg in self.config.channels:
             self.environment.shared_channels.get_or_create(
                 ch_cfg.name,
@@ -118,6 +118,17 @@ class TerrariumRuntime(HotPlugMixin):
                 channel=ch_cfg.name,
                 channel_type=ch_cfg.channel_type,
             )
+
+        # 1b. Auto-create a direct queue channel for each creature (named after it).
+        # This lets the root agent or other creatures send messages directly
+        # to a specific creature without extra config.
+        for creature_cfg in self.config.creatures:
+            self.environment.shared_channels.get_or_create(
+                creature_cfg.name,
+                channel_type="queue",
+                description=f"Direct channel to {creature_cfg.name}",
+            )
+            logger.debug("Auto-created creature channel", channel=creature_cfg.name)
 
         # 2. Backward-compat session - observer and API use _session.channels
         self._session = Session(key=self._session_key)
@@ -313,22 +324,34 @@ class TerrariumRuntime(HotPlugMixin):
     def _build_root_awareness_prompt(self) -> str:
         """Build prompt section telling root about the bound terrarium."""
         creature_names = [c.name for c in self.config.creatures]
+
         channel_lines: list[str] = []
         for ch in self.config.channels:
             desc = f" - {ch.description}" if ch.description else ""
             channel_lines.append(f"- `{ch.name}` ({ch.channel_type}){desc}")
 
-        return (
-            f"## Bound Terrarium: {self.config.name}\n"
-            f"\n"
-            f"You are managing this terrarium. Use terrarium_id='{self.config.name}' "
-            f"for all terrarium tool calls.\n"
-            f"\n"
-            f"### Creatures\n"
-            f"{', '.join(creature_names)}\n"
-            f"\n"
-            f"### Channels\n" + "\n".join(channel_lines)
-        )
+        # Document auto-created direct channels
+        direct_lines: list[str] = []
+        for name in creature_names:
+            direct_lines.append(f"- `{name}` (queue) - direct channel to {name}")
+
+        parts = [
+            f"## Bound Terrarium: {self.config.name}",
+            "",
+            f"Use terrarium_id='{self.config.name}' for all terrarium tool calls.",
+            "",
+            "### Creatures",
+            ", ".join(creature_names),
+            "",
+            "### Channels",
+            *channel_lines,
+            "",
+            "### Direct Channels",
+            "Every creature has a direct queue channel named after it.",
+            "Use these to send messages to a specific creature:",
+            *direct_lines,
+        ]
+        return "\n".join(parts)
 
     def _build_creature(self, creature_cfg: CreatureConfig) -> CreatureHandle:
         """
@@ -365,7 +388,13 @@ class TerrariumRuntime(HotPlugMixin):
         broadcast_names = {
             ch.name for ch in self.config.channels if ch.channel_type == "broadcast"
         }
-        for ch_name in creature_cfg.listen_channels:
+
+        # Always listen on the creature's own direct channel
+        all_listen = list(creature_cfg.listen_channels)
+        if creature_cfg.name not in all_listen:
+            all_listen.append(creature_cfg.name)
+
+        for ch_name in all_listen:
             prompt = None
             if ch_name in broadcast_names:
                 prompt = (

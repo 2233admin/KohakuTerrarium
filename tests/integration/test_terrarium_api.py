@@ -103,7 +103,8 @@ class TestAPIChannelOps:
         names = {ch["name"] for ch in channels}
         assert "inbox_alpha" in names
         assert "team_chat" in names
-        assert len(channels) == 5
+        # 5 config channels + 2 auto-created creature direct channels (alpha, beta)
+        assert len(channels) == 7
 
     async def test_list_channels_before_start(self, terrarium_config: TerrariumConfig):
         runtime = TerrariumRuntime(terrarium_config)
@@ -225,7 +226,8 @@ class TestAPITerrariumOps:
         assert status["running"] is True
         assert "alpha" in status["creatures"]
         assert "beta" in status["creatures"]
-        assert len(status["channels"]) == 5
+        # 5 config channels + 2 auto-created creature direct channels
+        assert len(status["channels"]) == 7
 
     async def test_is_running(self, started_runtime: TerrariumRuntime):
         api = started_runtime.api

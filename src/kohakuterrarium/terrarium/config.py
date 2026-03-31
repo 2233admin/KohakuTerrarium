@@ -126,12 +126,21 @@ def build_channel_topology_prompt(
 
         lines.append(f"- `{ch_name}` [{ch_cfg.channel_type}]{role_str}{desc}")
 
+    # Direct channel (auto-created, always available)
+    lines.append(
+        f"- `{creature.name}` [queue] (listen)"
+        f" - your direct channel, messages from the manager or other creatures"
+    )
     lines.append("")
 
-    # List other creatures for context
+    # List other creatures and their direct channels
     other_creatures = [c.name for c in config.creatures if c.name != creature.name]
     if other_creatures:
         lines.append(f"### Team Members: {', '.join(other_creatures)}")
+        lines.append(
+            "Each team member has a direct channel named after them "
+            "(e.g. send to channel `swe` to reach the swe creature)."
+        )
         lines.append("")
 
     return "\n".join(lines)

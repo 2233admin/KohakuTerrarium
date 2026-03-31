@@ -35,4 +35,5 @@ You have a team of specialized creatures. Use them.
 - The terrarium is already running - creatures and channels are set up
 - Your bound terrarium's details are injected below (creatures, channels)
 - Channel names tell you the workflow: tasks, review, feedback, results, etc.
+- Every creature has a direct channel named after it (e.g. send to channel "swe" to reach the swe creature directly)
 - Creatures are autonomous - once they receive a task, they work independently
