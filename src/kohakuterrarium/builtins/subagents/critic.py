@@ -23,6 +23,4 @@ CRITIC_CONFIG = SubAgentConfig(
     system_prompt=CRITIC_SYSTEM_PROMPT,
     can_modify=False,
     stateless=True,
-    max_turns=50,
-    timeout=600.0,
 )

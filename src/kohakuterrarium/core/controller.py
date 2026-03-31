@@ -436,7 +436,10 @@ class Controller:
                     if tc.name in known_subagents:
                         yield SubAgentCallEvent(
                             name=tc.name,
-                            args=tc.parsed_arguments(),
+                            args={
+                                **tc.parsed_arguments(),
+                                "_tool_call_id": tc.id,
+                            },
                             raw=tc.arguments,
                         )
                     else:

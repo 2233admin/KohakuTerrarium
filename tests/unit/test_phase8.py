@@ -420,20 +420,6 @@ class TestSubAgent:
         # bash and write are modifying tools, but since we're requesting read/glob, they shouldn't be there anyway
         # Actually the config.tools only contains read/glob, so write/bash wouldn't be added regardless
 
-    def test_is_modifying_tool(self):
-        """Test _is_modifying_tool method."""
-        config = SubAgentConfig(name="test", description="Test")
-        registry = Registry()
-        llm = MockLLM()
-        agent = SubAgent(config, registry, llm)
-
-        assert agent._is_modifying_tool("write") is True
-        assert agent._is_modifying_tool("edit") is True
-        assert agent._is_modifying_tool("bash") is True
-        assert agent._is_modifying_tool("python") is True
-        assert agent._is_modifying_tool("read") is False
-        assert agent._is_modifying_tool("glob") is False
-
     async def test_run_simple_task(self):
         """Test running a simple task."""
         config = SubAgentConfig(

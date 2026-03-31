@@ -208,7 +208,21 @@ class AgentHandlersMixin:
                         f"[{label}]{bg_tag} {arg_preview}",
                     )
                 elif isinstance(parse_event, SubAgentCallEvent):
+                    # Extract tool_call_id (native mode)
+                    sa_tool_call_id = parse_event.args.pop("_tool_call_id", None)
+
                     job_id = await self._start_subagent_async(parse_event)
+
+                    # Add placeholder to conversation (native mode needs it)
+                    if sa_tool_call_id:
+                        controller.conversation.append(
+                            "tool",
+                            f"Sub-agent '{parse_event.name}' running. "
+                            "Result will be delivered when ready.",
+                            tool_call_id=sa_tool_call_id,
+                            name=parse_event.name,
+                        )
+
                     # Flush buffered LLM text before showing activity
                     await self.output_router.flush()
                     if hasattr(self.output_router.default_output, "reset"):

@@ -18,6 +18,4 @@ WORKER_CONFIG = SubAgentConfig(
     system_prompt=WORKER_SYSTEM_PROMPT,
     can_modify=True,
     stateless=True,
-    max_turns=50,
-    timeout=600.0,
 )

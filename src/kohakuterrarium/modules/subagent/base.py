@@ -228,14 +228,8 @@ class SubAgent:
         for tool_name in self.config.tools:
             tool = self.parent_registry.get_tool(tool_name)
             if tool:
-                # Check if tool is allowed based on can_modify
-                if not self.config.can_modify and self._is_modifying_tool(tool_name):
-                    logger.warning(
-                        "Skipping modifying tool for read-only sub-agent",
-                        tool_name=tool_name,
-                        subagent=self.config.name,
-                    )
-                    continue
+                # Register all tools - access control is via prompting,
+                # not silent removal (which confuses the model)
                 limited.register_tool(tool)
             else:
                 self._missing_tools.append(tool_name)
@@ -246,18 +240,6 @@ class SubAgent:
                 )
 
         return limited
-
-    # Default set of tools considered modifying (used when config.modifying_tools is None)
-    DEFAULT_MODIFYING_TOOLS: set[str] = {"write", "edit", "bash", "python"}
-
-    def _is_modifying_tool(self, tool_name: str) -> bool:
-        """Check if tool can modify files."""
-        modifying_tools = (
-            self.config.modifying_tools
-            if self.config.modifying_tools is not None
-            else self.DEFAULT_MODIFYING_TOOLS
-        )
-        return tool_name in modifying_tools
 
     def _build_system_prompt(self) -> str:
         """Build complete system prompt with framework hints and tool list."""
@@ -315,10 +297,13 @@ class SubAgent:
         self._turns = 0
 
         try:
-            return await asyncio.wait_for(
-                self._run_internal(task),
-                timeout=self.config.timeout,
-            )
+            if self.config.timeout > 0:
+                return await asyncio.wait_for(
+                    self._run_internal(task),
+                    timeout=self.config.timeout,
+                )
+            else:
+                return await self._run_internal(task)
         except asyncio.TimeoutError:
             logger.warning(
                 "Sub-agent timed out",
@@ -356,8 +341,8 @@ class SubAgent:
 
         output_parts: list[str] = []
 
-        # Run conversation loop
-        while self._turns < self.config.max_turns:
+        # Run conversation loop (0 = unlimited turns)
+        while self.config.max_turns == 0 or self._turns < self.config.max_turns:
             self._turns += 1
             logger.debug(
                 "Sub-agent turn started",

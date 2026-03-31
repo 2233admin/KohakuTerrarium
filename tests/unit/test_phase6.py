@@ -69,8 +69,8 @@ class TestSubAgentConfig:
     def test_config_defaults(self):
         """Test config default values."""
         config = SubAgentConfig(name="test")
-        assert config.max_turns == 50
-        assert config.timeout == 600.0
+        assert config.max_turns == 0  # unlimited
+        assert config.timeout == 0  # no timeout
         assert config.output_to == OutputTarget.CONTROLLER
         assert config.interactive is False
 

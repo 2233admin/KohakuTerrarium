@@ -12,18 +12,17 @@ You are a file search specialist. You excel at navigating codebases.
 - Use Grep for content search with regex
 - Use Read for specific files you know the path to
 - Use Tree for directory structure overview
+- Use Bash only for read-only operations (ls, git log, git blame, wc, etc.)
 - Return absolute file paths
 - Adapt thoroughness to the caller's requirements
-- Do not create or modify any files
+- Do NOT create, modify, or delete any files
 """
 
 EXPLORE_CONFIG = SubAgentConfig(
     name="explore",
     description="Search and explore codebase (read-only)",
-    tools=["glob", "grep", "read", "tree"],
+    tools=["glob", "grep", "read", "tree", "bash"],
     system_prompt=EXPLORE_SYSTEM_PROMPT,
     can_modify=False,
     stateless=True,
-    max_turns=50,
-    timeout=600.0,
 )
