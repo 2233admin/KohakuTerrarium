@@ -491,6 +491,29 @@ def load_agent_config(agent_path: str | Path) -> AgentConfig:
     # Interpolate environment variables
     config_data = _interpolate_env_vars(raw_config)
 
+    return build_agent_config(config_data, agent_path)
+
+
+def build_agent_config(
+    config_data: dict[str, Any],
+    agent_path: Path,
+) -> AgentConfig:
+    """
+    Build AgentConfig from a raw config dict.
+
+    Handles base_config inheritance, system prompt loading, and
+    template rendering. Used by load_agent_config (from file) and
+    by terrarium runtime (inline root agent config from dict).
+
+    Args:
+        config_data: Raw config dict (env vars interpolated automatically)
+        agent_path: Path context for resolving relative paths
+
+    Returns:
+        Loaded AgentConfig
+    """
+    config_data = _interpolate_env_vars(config_data)
+
     # Resolve base_config inheritance
     base_config_ref = config_data.get("base_config")
     if base_config_ref:

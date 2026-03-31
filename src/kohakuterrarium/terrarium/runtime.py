@@ -15,7 +15,7 @@ from kohakuterrarium.terrarium.tool_manager import (
     TerrariumToolManager,
 )
 from kohakuterrarium.core.agent import Agent
-from kohakuterrarium.core.config import load_agent_config
+from kohakuterrarium.core.config import build_agent_config, load_agent_config
 from kohakuterrarium.core.environment import Environment
 from kohakuterrarium.core.session import Session
 from kohakuterrarium.modules.trigger.channel import ChannelTrigger
@@ -260,14 +260,10 @@ class TerrariumRuntime(HotPlugMixin):
         root_cfg = self.config.root
         assert root_cfg is not None
 
-        logger.info(
-            "Building root agent",
-            config_path=root_cfg.config_path,
-            interface=root_cfg.interface,
-        )
+        logger.info("Building root agent")
 
-        # Load root agent config
-        agent_config = load_agent_config(root_cfg.config_path)
+        # Build root agent config from inline dict (supports base_config inheritance)
+        agent_config = build_agent_config(root_cfg.config_data, root_cfg.base_dir)
 
         # Create a separate environment for the root agent
         # with a TerrariumToolManager pre-bound to this runtime
@@ -278,6 +274,7 @@ class TerrariumRuntime(HotPlugMixin):
 
         root_session = root_env.get_session("root")
 
+        # Root agent uses its own I/O from its creature config
         agent = Agent(
             agent_config,
             session=root_session,

@@ -1,9 +1,7 @@
 # SWE Team with Root Agent (TUI)
-# Same SWE team as terrariums/swe_team, but with a root agent
-# sitting OUTSIDE the terrarium, interacting with the user via TUI.
-#
-# The root agent manages the team: sends tasks, observes progress,
-# reports results. The user talks to root, not to the team directly.
+# Same SWE team, but with a root agent sitting OUTSIDE the terrarium.
+# The root agent uses TUI I/O - user talks to root via terminal,
+# root orchestrates the team via terrarium tools.
 #
 # Usage:
 #   kt terrarium run examples/terrariums/swe_team_managed_tui/
@@ -11,9 +9,21 @@
 terrarium:
   name: swe_team_managed_tui
 
+  # Root agent config - inline, inherits from creatures/root
+  # Overrides I/O to use TUI modules (same as swe_agent_tui pattern)
   root:
-    config: ../../../creatures/root
-    interface: tui
+    base_config: creatures/root
+    controller:
+      model: "${OPENROUTER_MODEL:google/gemini-3-flash-preview}"
+      api_key_env: OPENROUTER_API_KEY
+      base_url: https://openrouter.ai/api/v1
+      tool_format: native
+    input:
+      type: tui
+      prompt: "You: "
+    output:
+      type: tui
+      controller_direct: true
 
   creatures:
     - name: swe

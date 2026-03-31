@@ -41,11 +41,13 @@ class RootConfig:
     """Optional root agent configuration.
 
     The root agent sits OUTSIDE the terrarium and manages it via
-    terrarium tools. It is the user-facing interface.
+    terrarium tools. This is an inline agent config that supports
+    base_config inheritance - the user can point to creatures/root
+    and override I/O, model, etc.
     """
 
-    config_path: str  # Path to root creature config (e.g. creatures/root)
-    interface: str = "cli"  # "cli" or "tui" - how user talks to root
+    config_data: dict  # Raw agent config dict (supports base_config inheritance)
+    base_dir: Path  # Directory for resolving relative paths
 
 
 @dataclass
@@ -237,18 +239,11 @@ def load_terrarium_config(path: str | Path) -> TerrariumConfig:
     channels_raw = terrarium_data.get("channels", {})
     channels = _parse_channels(channels_raw)
 
-    # Parse optional root agent
+    # Parse optional root agent (inline agent config with base_config support)
     root: RootConfig | None = None
     root_raw = terrarium_data.get("root")
     if root_raw:
-        root_path = root_raw.get("config", "")
-        if not root_path:
-            raise ValueError("Root agent config missing 'config' path")
-        resolved_root = str((base_dir / root_path).resolve())
-        root = RootConfig(
-            config_path=resolved_root,
-            interface=root_raw.get("interface", "cli"),
-        )
+        root = RootConfig(config_data=dict(root_raw), base_dir=base_dir)
 
     config = TerrariumConfig(
         name=name, creatures=creatures, channels=channels, root=root
