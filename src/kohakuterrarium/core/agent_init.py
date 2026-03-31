@@ -152,6 +152,11 @@ class AgentInitMixin:
         self.executor._agent_name = self.config.name
         self.executor._session = self.session
         self.executor._environment = getattr(self, "environment", None)
+        self.executor._tool_format = (
+            self.config.tool_format
+            if isinstance(self.config.tool_format, str)
+            else "bracket"
+        )
         if self.config.agent_path:
             self.executor._working_dir = self.config.agent_path
         if hasattr(self.config, "agent_path") and self.config.agent_path:

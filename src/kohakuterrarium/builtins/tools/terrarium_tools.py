@@ -8,6 +8,7 @@ stored in the environment context.
 
 import asyncio
 import json
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -471,7 +472,8 @@ class CreatureStartTool(BaseTool):
             runtime = manager.get_runtime(terrarium_id)
             creature_cfg = CreatureConfig(
                 name=name,
-                config_path=config_path,
+                config_data={"base_config": config_path},
+                base_dir=Path.cwd(),
                 listen_channels=listen,
                 send_channels=send,
             )

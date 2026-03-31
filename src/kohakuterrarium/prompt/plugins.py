@@ -108,7 +108,7 @@ class ToolListPlugin(BasePlugin):
             lines.append(f"- `{name}`: {description}")
 
         lines.append("")
-        lines.append("Use `[/info]tool_name[info/]` for full documentation.")
+        lines.append("Use the `info` tool for full documentation on any function.")
 
         return "\n".join(lines)
 

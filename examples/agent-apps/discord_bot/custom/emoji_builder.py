@@ -34,7 +34,11 @@ from kohakuterrarium.llm.openai import OpenAIProvider
 from kohakuterrarium.utils.logging import get_logger
 
 from emoji_db import DEFAULT_DB_PATH, EmojiDatabase, EmojiRecord, save_emoji_db
-from image_utils import convert_image_to_jpeg, extract_animated_frames, image_to_data_url
+from image_utils import (
+    convert_image_to_jpeg,
+    extract_animated_frames,
+    image_to_data_url,
+)
 
 logger = get_logger("kohakuterrarium.emoji_builder")
 
@@ -288,15 +292,19 @@ async def build_emoji_database(
     llm: OpenAIProvider | None = None
     if not skip_captioning:
         # Resolve LLM settings (CLI args > yaml config > defaults)
-        resolved_model = llm_model or yaml_config.get("model", "google/gemini-2.0-flash-001")
-        resolved_base_url = llm_base_url or yaml_config.get("base_url", "https://openrouter.ai/api/v1")
+        resolved_model = llm_model or yaml_config.get(
+            "model", "google/gemini-2.0-flash-001"
+        )
+        resolved_base_url = llm_base_url or yaml_config.get(
+            "base_url", "https://openrouter.ai/api/v1"
+        )
         api_key_env = yaml_config.get("api_key_env", "OPENROUTER_API_KEY")
         api_key = llm_api_key or os.environ.get(api_key_env)
 
         # Expand env vars in model name (e.g., ${OPENROUTER_MODEL:default})
         if resolved_model.startswith("${") and "}" in resolved_model:
             # Parse ${VAR:default} format
-            var_part = resolved_model[2:resolved_model.index("}")]
+            var_part = resolved_model[2 : resolved_model.index("}")]
             if ":" in var_part:
                 var_name, default = var_part.split(":", 1)
             else:
@@ -389,7 +397,11 @@ async def process_emoji(
     try:
         # Check if already in database
         existing = db.get_emoji(emoji.id)
-        if existing and existing.caption and not (update_existing and not skip_captioning):
+        if (
+            existing
+            and existing.caption
+            and not (update_existing and not skip_captioning)
+        ):
             logger.debug(f"Skipping existing emoji: {emoji.name}")
             return
 
@@ -408,7 +420,9 @@ async def process_emoji(
                 data_url = prepare_emoji_for_vision(image_data, emoji.animated)
                 if data_url:
                     try:
-                        caption = await caption_emoji_with_llm(llm, data_url, emoji.name)
+                        caption = await caption_emoji_with_llm(
+                            llm, data_url, emoji.name
+                        )
                         tags = extract_tags_from_caption(caption, emoji.name)
                         logger.debug(
                             f"Captioned emoji: {emoji.name}",

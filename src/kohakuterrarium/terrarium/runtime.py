@@ -15,7 +15,7 @@ from kohakuterrarium.terrarium.tool_manager import (
     TerrariumToolManager,
 )
 from kohakuterrarium.core.agent import Agent
-from kohakuterrarium.core.config import build_agent_config, load_agent_config
+from kohakuterrarium.core.config import build_agent_config
 from kohakuterrarium.core.environment import Environment
 from kohakuterrarium.core.session import Session
 from kohakuterrarium.modules.trigger.channel import ChannelTrigger
@@ -337,11 +337,12 @@ class TerrariumRuntime(HotPlugMixin):
         logger.info(
             "Building creature",
             creature=creature_cfg.name,
-            config_path=creature_cfg.config_path,
         )
 
-        # Load the agent config from the creature's config path
-        agent_config = load_agent_config(creature_cfg.config_path)
+        # Build agent config from inline dict (same format as standalone)
+        agent_config = build_agent_config(
+            creature_cfg.config_data, creature_cfg.base_dir
+        )
 
         # Each creature gets a PRIVATE session from the environment
         creature_session = self.environment.get_session(creature_cfg.name)

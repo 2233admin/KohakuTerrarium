@@ -231,13 +231,13 @@ class EditTool(BaseTool):
 
         if not path:
             return ToolResult(
-                error="No path provided. Use @@path= to specify the file:\n\n"
-                "[/edit]\n"
-                "@@path=path/to/file.py\n"
+                error="No path provided. The edit tool requires:\n"
+                "- path: file to edit\n"
+                "- diff: unified diff content\n\n"
+                "Diff format:\n"
                 "@@ -10,2 +10,3 @@\n"
                 " context line\n"
-                "+new line\n"
-                "[edit/]"
+                "+new line"
             )
         if not diff:
             return ToolResult(error="No diff provided")
@@ -262,19 +262,14 @@ class EditTool(BaseTool):
             except DiffParseError as e:
                 return ToolResult(
                     error=f"Invalid diff format: {e}\n\n"
-                    "COMPLETE EXAMPLE - copy this format exactly:\n"
-                    "[/edit]\n"
-                    "@@path=src/file.py\n"
+                    "Unified diff format:\n"
                     "@@ -10,3 +10,4 @@\n"
                     " context line (starts with space)\n"
                     "-line to remove (starts with minus)\n"
                     "+line to add (starts with plus)\n"
-                    "+another new line\n"
-                    "[edit/]\n\n"
+                    "+another new line\n\n"
                     "IMPORTANT:\n"
-                    "- @@path= is the tool argument (file path)\n"
-                    "- @@ -10,3 +10,4 @@ is the diff hunk header (line numbers)\n"
-                    "- These are DIFFERENT! Don't confuse them.\n"
+                    "- @@ -N,M +N,M @@ is the hunk header (line numbers)\n"
                     "- Lines starting with space = context (unchanged)\n"
                     "- Lines starting with - = removed\n"
                     "- Lines starting with + = added"

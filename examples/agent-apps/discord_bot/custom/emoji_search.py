@@ -8,7 +8,12 @@ built by emoji_builder.py.
 from pathlib import Path
 from typing import Any
 
-from kohakuterrarium.modules.tool.base import BaseTool, ExecutionMode, ToolConfig, ToolResult
+from kohakuterrarium.modules.tool.base import (
+    BaseTool,
+    ExecutionMode,
+    ToolConfig,
+    ToolResult,
+)
 from kohakuterrarium.utils.logging import get_logger
 
 from emoji_db import DEFAULT_DB_PATH, EmojiDatabase, EmojiRecord, get_emoji_db
@@ -106,7 +111,9 @@ class EmojiSearchTool(BaseTool):
         for i, emoji in enumerate(results, 1):
             discord_fmt = emoji.to_discord_format()
             anim_tag = " (animated)" if emoji.animated else ""
-            caption_preview = emoji.caption[:80] + "..." if len(emoji.caption) > 80 else emoji.caption
+            caption_preview = (
+                emoji.caption[:80] + "..." if len(emoji.caption) > 80 else emoji.caption
+            )
 
             output_lines.append(f"{i}. {discord_fmt} :{emoji.name}:{anim_tag}")
             if caption_preview:
@@ -227,7 +234,8 @@ class EmojiListTool(BaseTool):
 
         if not paginated:
             return ToolResult(
-                output="No emojis found" + (f" for guild {guild_id}" if guild_id else ""),
+                output="No emojis found"
+                + (f" for guild {guild_id}" if guild_id else ""),
                 metadata={"count": 0},
             )
 
@@ -240,7 +248,9 @@ class EmojiListTool(BaseTool):
         for emoji in paginated:
             discord_fmt = emoji.to_discord_format()
             anim_tag = " (animated)" if emoji.animated else ""
-            output_lines.append(f"- {discord_fmt} :{emoji.name}:{anim_tag} [{emoji.guild_name}]")
+            output_lines.append(
+                f"- {discord_fmt} :{emoji.name}:{anim_tag} [{emoji.guild_name}]"
+            )
 
         return ToolResult(
             output="\n".join(output_lines),

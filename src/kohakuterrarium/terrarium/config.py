@@ -26,10 +26,15 @@ class ChannelConfig:
 
 @dataclass
 class CreatureConfig:
-    """Configuration for a single creature (agent) in the terrarium."""
+    """Configuration for a creature in a terrarium.
+
+    Uses the same agent config format as standalone creatures.
+    The terrarium adds channel wiring as metadata on top.
+    """
 
     name: str
-    config_path: str  # Path to agent config folder
+    config_data: dict  # Full agent config dict (supports base_config inheritance)
+    base_dir: Path  # Directory for resolving relative paths
     listen_channels: list[str] = field(default_factory=list)
     send_channels: list[str] = field(default_factory=list)
     output_log: bool = False
@@ -157,27 +162,35 @@ def _find_terrarium_config(path: Path) -> Path:
 
 
 def _parse_creature(data: dict, base_dir: Path) -> CreatureConfig:
-    """Parse a single creature entry from raw YAML data."""
+    """Parse a single creature entry from raw YAML data.
+
+    The creature entry is a standard agent config dict with optional
+    terrarium wiring fields (channels, output_log). Everything else
+    is passed through as agent config for build_agent_config().
+    """
+    data = dict(data)  # Don't mutate the original
     name = data.get("name", "")
     if not name:
         raise ValueError("Creature entry missing 'name'")
 
-    raw_path = data.get("config", "")
-    if not raw_path:
-        raise ValueError(f"Creature '{name}' missing 'config' path")
+    # Extract terrarium-specific fields (not part of agent config)
+    channels = data.pop("channels", {})
+    output_log = data.pop("output_log", False)
+    output_log_size = data.pop("output_log_size", 100)
 
-    # Resolve config_path relative to the terrarium config directory
-    resolved = (base_dir / raw_path).resolve()
-
-    channels = data.get("channels", {})
+    # Backward compat: if "config" key exists (old path-only format),
+    # convert to base_config
+    if "config" in data and "base_config" not in data:
+        data["base_config"] = data.pop("config")
 
     return CreatureConfig(
         name=name,
-        config_path=str(resolved),
+        config_data=data,
+        base_dir=base_dir,
         listen_channels=list(channels.get("listen", [])),
         send_channels=list(channels.get("can_send", [])),
-        output_log=bool(data.get("output_log", False)),
-        output_log_size=int(data.get("output_log_size", 100)),
+        output_log=bool(output_log),
+        output_log_size=int(output_log_size),
     )
 
 

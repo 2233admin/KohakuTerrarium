@@ -429,4 +429,3 @@ class KohakuManager:
             await self.agent_stop(agent_id)
         for tid in list(self._terrariums.keys()):
             await self.terrarium_stop(tid)
-

@@ -23,63 +23,80 @@ from kohakuterrarium.llm.base import LLMProvider
 from kohakuterrarium.modules.subagent.config import OutputTarget, SubAgentConfig
 from kohakuterrarium.modules.tool.base import Tool
 from kohakuterrarium.parsing import ParserConfig, StreamParser, TextEvent, ToolCallEvent
-from kohakuterrarium.parsing.format import BRACKET_FORMAT, XML_FORMAT, ToolCallFormat
+from kohakuterrarium.parsing.format import (
+    BRACKET_FORMAT,
+    XML_FORMAT,
+    ToolCallFormat,
+    format_tool_call_example,
+)
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-# Framework hints for sub-agents (bracket format)
-SUBAGENT_FRAMEWORK_HINTS_BRACKET = """
-## Tool Calling Format
-
-Format: `[/name]` opens, `[name/]` closes
-
-```
-[/tool_name]
-@@arg=value
-content here
-[tool_name/]
-```
-
-Examples:
-
-```
-[/glob]@@pattern=**/*.py[glob/]
-```
-
-```
-[/grep]@@pattern=class.*Config[grep/]
-```
-
-```
-[/read]@@path=src/main.py[read/]
-```
-
+_SUBAGENT_CRITICAL_RULES = """
 ## CRITICAL: You MUST use tools to complete your task
 
-- Call tools using the [/tool]...[tool/] format above
 - After calling a tool, STOP and wait for results
 - Do NOT just describe what you would do - actually DO it
 - Continue calling tools until task is complete
 """.strip()
 
-# Framework hints for sub-agents (native tool calling)
-SUBAGENT_FRAMEWORK_HINTS_NATIVE = """
-## Tool Calling
 
-Use the provided tool functions directly. The LLM provider handles tool call formatting.
+def build_subagent_framework_hints(
+    tool_format: str | None,
+    parser_format: "ToolCallFormat | None" = None,
+) -> str:
+    """Build format-aware framework hints for sub-agents.
 
-## CRITICAL: You MUST use tools to complete your task
+    - Native mode: no format examples (API handles it)
+    - Custom mode: generate examples from the actual ToolCallFormat
+    """
+    if tool_format == "native":
+        return (
+            "## Tool Calling\n\n"
+            "Tools are called via the API's native function calling mechanism.\n"
+            "You do not need to format tool calls manually.\n\n"
+            + _SUBAGENT_CRITICAL_RULES
+        )
 
-- Call tools using the native function calling interface
-- After calling a tool, STOP and wait for results
-- Do NOT just describe what you would do - actually DO it
-- Continue calling tools until task is complete
-""".strip()
+    # Custom format: generate examples from ToolCallFormat
+    if parser_format is None:
+        parser_format = BRACKET_FORMAT
 
-# Backward-compatible alias
-SUBAGENT_FRAMEWORK_HINTS = SUBAGENT_FRAMEWORK_HINTS_BRACKET
+    lines = ["## Tool Calling Format", ""]
+
+    # Show generic format
+    generic = format_tool_call_example(
+        parser_format, "tool_name", {"arg": "value"}, "content here"
+    )
+    lines.append(f"```\n{generic}\n```")
+    lines.append("")
+
+    # Show concrete examples
+    lines.append("Examples:")
+    lines.append("")
+
+    glob_ex = format_tool_call_example(parser_format, "glob", {"pattern": "**/*.py"})
+    lines.append(f"```\n{glob_ex}\n```")
+    lines.append("")
+
+    grep_ex = format_tool_call_example(
+        parser_format, "grep", {"pattern": "class.*Config"}
+    )
+    lines.append(f"```\n{grep_ex}\n```")
+    lines.append("")
+
+    read_ex = format_tool_call_example(parser_format, "read", {"path": "src/main.py"})
+    lines.append(f"```\n{read_ex}\n```")
+    lines.append("")
+
+    lines.append(_SUBAGENT_CRITICAL_RULES)
+    return "\n".join(lines)
+
+
+# Backward-compatible alias (bracket format)
+SUBAGENT_FRAMEWORK_HINTS = build_subagent_framework_hints("bracket", BRACKET_FORMAT)
 
 
 @dataclass
@@ -273,11 +290,9 @@ class SubAgent:
             )
             parts.append(missing_note)
 
-        # Framework hints (use native hints when in native mode)
-        if self._is_native:
-            parts.append(SUBAGENT_FRAMEWORK_HINTS_NATIVE)
-        else:
-            parts.append(SUBAGENT_FRAMEWORK_HINTS_BRACKET)
+        # Framework hints (format-aware)
+        parser_fmt = self._resolve_parser_format(self.tool_format)
+        parts.append(build_subagent_framework_hints(self.tool_format, parser_fmt))
 
         result = "\n\n".join(parts)
         logger.info(

@@ -56,6 +56,7 @@ class ToolContext:
     working_dir: Path
     memory_path: Path | None = None
     environment: Any = None  # Environment - shared state (None for standalone agents)
+    tool_format: str = "native"  # "native", "bracket", "xml", or custom
 
     @property
     def channels(self) -> Any:
@@ -215,11 +216,15 @@ class BaseTool:
         """
         raise NotImplementedError
 
-    def get_full_documentation(self) -> str:
+    def get_full_documentation(self, tool_format: str = "native") -> str:
         """
-        Get full documentation for ##info## command.
+        Get full documentation for the info tool.
 
-        Override to provide detailed docs.
+        Override to provide detailed docs. Use tool_format to generate
+        format-appropriate examples (or omit examples in native mode).
+
+        Args:
+            tool_format: "native", "bracket", "xml", or custom
         """
         return f"""# {self.tool_name}
 

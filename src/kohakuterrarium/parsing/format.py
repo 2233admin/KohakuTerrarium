@@ -39,3 +39,48 @@ XML_FORMAT = ToolCallFormat(
     arg_style="inline",
     arg_prefix="",
 )
+
+
+def format_tool_call_example(
+    fmt: ToolCallFormat,
+    name: str,
+    args: dict[str, str] | None = None,
+    body: str = "",
+) -> str:
+    """Generate a tool call example string from a ToolCallFormat.
+
+    Used by prompt generators to show format-correct examples
+    regardless of the configured format (bracket, xml, custom).
+    """
+    s, e = fmt.start_char, fmt.end_char
+
+    # Opening tag
+    if fmt.slash_means_open:
+        # Bracket style: [/name]
+        open_tag = f"{s}/{name}{e}"
+        close_tag = f"{s}{name}/{e}"
+    else:
+        # XML style: <name> or <name arg="val">
+        open_tag = f"{s}{name}{e}"
+        close_tag = f"{s}/{name}{e}"
+
+    # Inline args (XML style): <name key="val" key2="val2">
+    if args and fmt.arg_style == "inline":
+        attr_str = " ".join(f'{k}="{v}"' for k, v in args.items())
+        if fmt.slash_means_open:
+            open_tag = f"{s}/{name} {attr_str}{e}"
+        else:
+            open_tag = f"{s}{name} {attr_str}{e}"
+
+    parts = [open_tag]
+
+    # Line-style args: @@key=value per line
+    if args and fmt.arg_style == "line":
+        for k, v in args.items():
+            parts.append(f"{fmt.arg_prefix}{k}{fmt.arg_kv_sep}{v}")
+
+    if body:
+        parts.append(body)
+
+    parts.append(close_tag)
+    return "\n".join(parts)

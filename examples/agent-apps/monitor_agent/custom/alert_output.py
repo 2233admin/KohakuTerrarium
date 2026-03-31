@@ -1,4 +1,5 @@
 """Custom webhook alert output module."""
+
 from typing import Any
 
 from kohakuterrarium.modules.output.base import OutputModule

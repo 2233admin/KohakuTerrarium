@@ -196,7 +196,9 @@ class EmojiDatabase:
         """Load database from JSON file."""
         path = Path(path)
         if not path.exists():
-            logger.warning("Emoji database not found, creating empty", extra={"path": str(path)})
+            logger.warning(
+                "Emoji database not found, creating empty", extra={"path": str(path)}
+            )
             return cls()
         with open(path, encoding="utf-8") as f:
             data = json.load(f)

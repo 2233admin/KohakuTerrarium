@@ -150,9 +150,10 @@ class SubAgentManager:
             lines.append(info.to_prompt_line())
 
         lines.append("")
-        lines.append(
-            "Use: `[/name]task description[name/]` (e.g., `[/explore]find auth code[explore/]`)"
-        )
+        if self._tool_format == "native":
+            lines.append("Sub-agents are called as tools via the API (param: `task`).")
+        else:
+            lines.append("Call sub-agents like tools with a task description.")
 
         return "\n".join(lines)
 

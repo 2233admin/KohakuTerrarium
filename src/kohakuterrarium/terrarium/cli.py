@@ -212,7 +212,8 @@ def _info_terrarium_cli(args: argparse.Namespace) -> int:
     print(f"\nCreatures ({len(config.creatures)}):")
     for c in config.creatures:
         print(f"  {c.name}")
-        print(f"    config: {c.config_path}")
+        base = c.config_data.get("base_config", "(inline)")
+        print(f"    base: {base}")
         if c.listen_channels:
             print(f"    listen: {c.listen_channels}")
         if c.send_channels:

@@ -300,7 +300,9 @@ def aggregate_system_prompt(
         hint_ctx = dict(extra_context or {})
         if channels is not None:
             hint_ctx["channels"] = channels
-        channel_hints = _build_channel_hints(registry, hint_ctx)
+        channel_hints = _build_channel_hints(
+            registry, hint_ctx, tool_format=tool_format
+        )
         if channel_hints:
             parts.append(channel_hints)
 
@@ -354,6 +356,7 @@ def _build_output_hints(known_outputs: set[str] | None) -> str:
 def _build_channel_hints(
     registry: Registry,
     extra_context: dict | None = None,
+    tool_format: str = "bracket",
 ) -> str:
     """Build channel communication hints when channel tools are registered.
 
@@ -407,14 +410,24 @@ def _build_channel_hints(
         )
         lines.append("")
 
-    # Usage guidance
+    # Usage guidance (format-aware)
     lines.append("**Usage:**")
-    if has_send:
-        lines.append(
-            "- Send: `[/send_message]@@channel=name\\nYour message[send_message/]`"
-        )
-    if has_wait:
-        lines.append("- Receive: `[/wait_channel]@@channel=name[wait_channel/]`")
+    if tool_format == "native":
+        # Native mode: no syntax examples, API handles format
+        if has_send:
+            lines.append(
+                "- Use the `send_message` tool with `channel` and `message` parameters"
+            )
+        if has_wait:
+            lines.append(
+                "- Use the `wait_channel` tool with `channel` parameter to receive"
+            )
+    else:
+        # Custom format: describe tools without hardcoding bracket syntax
+        if has_send:
+            lines.append("- Use `send_message` to send (params: channel, message)")
+        if has_wait:
+            lines.append("- Use `wait_channel` to receive (params: channel, timeout)")
     lines.append(
         "- Queue channels can be created on-the-fly. "
         "Broadcast channels must already exist."
@@ -455,7 +468,7 @@ def _build_tools_list(registry: Registry) -> str:
             lines.append(f"- `{name}`: {desc}")
         lines.append("")
 
-    lines.append("Use `[/info]name[info/]` for full documentation.")
+    lines.append("Use the `info` tool for full documentation on any function.")
 
     return "\n".join(lines)
 

@@ -1,7 +1,6 @@
 # SWE Team with Root Agent (TUI)
 # Same SWE team, but with a root agent sitting OUTSIDE the terrarium.
-# The root agent uses TUI I/O - user talks to root via terminal,
-# root orchestrates the team via terrarium tools.
+# Root agent uses TUI I/O for interactive terminal experience.
 #
 # Usage:
 #   kt terrarium run examples/terrariums/swe_team_managed_tui/
@@ -9,8 +8,7 @@
 terrarium:
   name: swe_team_managed_tui
 
-  # Root agent config - inline, inherits from creatures/root
-  # Overrides I/O to use TUI modules (same as swe_agent_tui pattern)
+  # Root agent - inline creature config with inheritance
   root:
     base_config: creatures/root
     controller:
@@ -27,13 +25,13 @@ terrarium:
 
   creatures:
     - name: swe
-      config: ../../../creatures/swe
+      base_config: creatures/swe
       channels:
         listen: [tasks, feedback, team_chat]
         can_send: [review, team_chat]
 
     - name: reviewer
-      config: ../../../creatures/reviewer
+      base_config: creatures/reviewer
       channels:
         listen: [review, team_chat]
         can_send: [feedback, results, team_chat]

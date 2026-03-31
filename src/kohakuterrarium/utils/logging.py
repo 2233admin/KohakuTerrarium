@@ -187,7 +187,9 @@ def get_logger(name: str, level: int | str = logging.INFO) -> logging.Logger:
         # Use flushing handler for immediate log output
         _handler = FlushingStreamHandler(sys.stderr)
         _handler.setFormatter(ColoredFormatter(use_color=True))
-        _handler.setLevel(logging.DEBUG)  # Handler passes all; level controlled per-logger
+        _handler.setLevel(
+            logging.DEBUG
+        )  # Handler passes all; level controlled per-logger
 
         # Add to root logger for kohakuterrarium
         root_logger = logging.getLogger("kohakuterrarium")
