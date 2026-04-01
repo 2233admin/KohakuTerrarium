@@ -4,12 +4,21 @@ Configuration loading and validation for KohakuTerrarium agents.
 Supports YAML, JSON, and TOML formats with environment variable interpolation.
 """
 
+import json
 import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore
+
+from kohakuterrarium.prompt.template import render_template_safe
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -198,27 +207,18 @@ def _interpolate_env_vars(value: Any) -> Any:
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     """Load YAML file."""
-    import yaml
-
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
 def _load_json(path: Path) -> dict[str, Any]:
     """Load JSON file."""
-    import json
-
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
     """Load TOML file."""
-    try:
-        import tomllib
-    except ImportError:
-        import tomli as tomllib  # type: ignore
-
     with open(path, "rb") as f:
         return tomllib.load(f)
 
@@ -651,8 +651,6 @@ def build_agent_config(
 
         # Render template with context variables
         if context_vars:
-            from kohakuterrarium.prompt.template import render_template_safe
-
             config.system_prompt = render_template_safe(
                 config.system_prompt, **context_vars
             )

@@ -7,8 +7,8 @@ from kohakuterrarium.core.channel import (
     AgentChannel,
     ChannelRegistry,
     ChannelSubscription,
-    get_channel_registry,
 )
+from kohakuterrarium.core.session import get_channel_registry
 from kohakuterrarium.core.events import EventType, TriggerEvent
 from kohakuterrarium.modules.trigger.base import BaseTrigger
 from kohakuterrarium.utils.logging import get_logger

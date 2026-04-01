@@ -27,6 +27,8 @@ Usage:
     await tts.interrupt()
 """
 
+import asyncio
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -307,8 +309,6 @@ class DummyTTS(TTSModule):
 
     async def _synthesize(self, text: str) -> AsyncIterator[AudioChunk]:
         """Fake synthesis - just yield empty chunks."""
-        import asyncio
-
         # Simulate synthesis delay based on text length
         delay = len(text) * 0.01  # ~10ms per character
         await asyncio.sleep(min(delay, 0.5))
@@ -365,9 +365,6 @@ class ConsoleTTS(TTSModule):
 
     async def _play_audio(self, chunk: AudioChunk) -> None:
         """Print character with delay."""
-        import asyncio
-        import sys
-
         if chunk.text:
             sys.stdout.write(chunk.text)
             sys.stdout.flush()
@@ -379,7 +376,5 @@ class ConsoleTTS(TTSModule):
 
     async def _stop_playback(self) -> None:
         """Print newline on interrupt."""
-        import sys
-
         sys.stdout.write(" [interrupted]\n")
         sys.stdout.flush()

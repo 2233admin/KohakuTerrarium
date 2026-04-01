@@ -5,6 +5,7 @@ Provides terminal-based input for agents.
 """
 
 import asyncio
+import select
 import sys
 
 from kohakuterrarium.core.events import TriggerEvent, create_user_input_event
@@ -166,8 +167,6 @@ class NonBlockingCLIInput(BaseInputModule):
 
     def _try_read(self) -> str | None:
         """Try to read a line (may block briefly)."""
-        import select
-
         # Check if input available (Unix only)
         if sys.platform != "win32":
             ready, _, _ = select.select([sys.stdin], [], [], self.timeout)

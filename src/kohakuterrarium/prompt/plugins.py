@@ -13,6 +13,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from kohakuterrarium.parsing.format import (
+    BRACKET_FORMAT,
+    XML_FORMAT,
+    format_tool_call_example,
+)
 from kohakuterrarium.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -139,12 +144,6 @@ class FrameworkHintsPlugin(BasePlugin):
             )
 
         # Custom format: generate examples from ToolCallFormat
-        from kohakuterrarium.parsing.format import (
-            BRACKET_FORMAT,
-            XML_FORMAT,
-            format_tool_call_example,
-        )
-
         match context.tool_format:
             case "xml":
                 fmt = XML_FORMAT

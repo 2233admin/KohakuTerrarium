@@ -19,6 +19,7 @@ from kohakuterrarium.builtins.outputs import (
     create_builtin_output,
     is_builtin_output,
 )
+from kohakuterrarium.builtins.subagents import get_builtin_subagent_config
 from kohakuterrarium.builtins.tools import get_builtin_tool
 from kohakuterrarium.core.config import AgentConfig
 from kohakuterrarium.core.controller import Controller, ControllerConfig
@@ -26,18 +27,26 @@ from kohakuterrarium.core.executor import Executor
 from kohakuterrarium.core.loader import ModuleLoadError, ModuleLoader
 from kohakuterrarium.core.registry import Registry
 from kohakuterrarium.core.session import get_session
+from kohakuterrarium.llm.codex_provider import CodexOAuthProvider
 from kohakuterrarium.llm.openai import OpenAIProvider
+from kohakuterrarium.modules.input.base import InputModule
+from kohakuterrarium.modules.output.base import OutputModule
+from kohakuterrarium.modules.output.router import OutputRouter
+from kohakuterrarium.modules.subagent import SubAgentManager
+from kohakuterrarium.modules.subagent.config import SubAgentConfig
 from kohakuterrarium.modules.trigger import (
     BaseTrigger,
     ChannelTrigger,
     ContextUpdateTrigger,
     TimerTrigger,
 )
+from kohakuterrarium.parsing.format import (
+    BRACKET_FORMAT,
+    XML_FORMAT,
+    ToolCallFormat,
+)
 from kohakuterrarium.prompt.aggregator import aggregate_system_prompt
 from kohakuterrarium.utils.logging import get_logger
-from kohakuterrarium.modules.input.base import InputModule
-from kohakuterrarium.modules.output.base import OutputModule
-from kohakuterrarium.modules.output.router import OutputRouter
 
 logger = get_logger(__name__)
 
@@ -57,8 +66,6 @@ class AgentInitMixin:
         """Initialize LLM provider based on auth_mode."""
         if self.config.auth_mode == "codex-oauth":
             # Codex OAuth: uses ChatGPT subscription, no API key needed
-            from kohakuterrarium.llm.codex_provider import CodexOAuthProvider
-
             self.llm = CodexOAuthProvider(
                 model=self.config.model,
                 reasoning_effort=self.config.reasoning_effort,
@@ -170,10 +177,6 @@ class AgentInitMixin:
 
     def _init_subagents(self) -> None:
         """Initialize sub-agent manager and register sub-agents."""
-        # Import here to avoid circular imports (subagent -> core/conversation -> core/__init__ -> agent)
-        from kohakuterrarium.builtins.subagents import get_builtin_subagent_config
-        from kohakuterrarium.modules.subagent import SubAgentManager
-
         # Pass parent's tool_format so sub-agents inherit it
         parent_tool_format = (
             self.config.tool_format
@@ -208,8 +211,6 @@ class AgentInitMixin:
 
     def _create_subagent_config(self, item: Any, get_builtin: Any) -> Any:
         """Create a SubAgentConfig from config item."""
-        from kohakuterrarium.modules.subagent.config import SubAgentConfig
-
         match item.type:
             case "builtin":
                 config = get_builtin(item.name)
@@ -253,7 +254,7 @@ class AgentInitMixin:
                 logger.warning("Unknown sub-agent type", subagent_type=item.type)
                 return None
 
-    def _resolve_tool_format(self) -> "ToolCallFormat | None":
+    def _resolve_tool_format(self) -> ToolCallFormat | None:
         """
         Resolve tool_format config to a ToolCallFormat instance.
 
@@ -261,12 +262,6 @@ class AgentInitMixin:
             ToolCallFormat for bracket/xml/custom, or None for native mode
             (native mode bypasses the stream parser entirely).
         """
-        from kohakuterrarium.parsing.format import (
-            BRACKET_FORMAT,
-            XML_FORMAT,
-            ToolCallFormat,
-        )
-
         fmt = self.config.tool_format
         if isinstance(fmt, str):
             match fmt:

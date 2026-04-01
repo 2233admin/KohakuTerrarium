@@ -7,6 +7,7 @@ Usage:
     ##info tool_name##
 """
 
+import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -256,8 +257,6 @@ class WaitCommand(BaseCommand):
 
     async def _execute(self, args: str, context: Any) -> CommandResult:
         """Wait for job."""
-        import asyncio
-
         job_id, kwargs = parse_command_args(args)
 
         if not job_id:

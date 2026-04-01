@@ -8,8 +8,8 @@ from kohakuterrarium.builtins.tools.registry import register_builtin
 from kohakuterrarium.core.channel import (
     AgentChannel,
     SubAgentChannel,
-    get_channel_registry,
 )
+from kohakuterrarium.core.session import get_channel_registry
 from kohakuterrarium.modules.tool.base import (
     BaseTool,
     ExecutionMode,

@@ -3,7 +3,7 @@
 from typing import Any
 
 from kohakuterrarium.builtins.tools.registry import register_builtin
-from kohakuterrarium.core.scratchpad import get_scratchpad
+from kohakuterrarium.core.session import get_scratchpad
 from kohakuterrarium.modules.tool.base import (
     BaseTool,
     ExecutionMode,

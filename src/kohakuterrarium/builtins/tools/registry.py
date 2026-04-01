@@ -48,7 +48,11 @@ _TERRARIUM_TOOLS_LOADED = False
 
 
 def _ensure_terrarium_tools() -> None:
-    """Load terrarium tools on first request (avoids circular import at init)."""
+    """Load terrarium tools on first request.
+
+    This is a lazy-loading pattern (same as __init__.py public API imports)
+    to avoid a circular import: builtins.tools <-> terrarium.runtime <-> core.agent.
+    """
     global _TERRARIUM_TOOLS_LOADED
     if _TERRARIUM_TOOLS_LOADED:
         return

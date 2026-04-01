@@ -9,6 +9,14 @@ import logging
 import sys
 from typing import Any
 
+try:
+    import ctypes
+
+    HAS_CTYPES = True
+except ImportError:
+    ctypes = None  # type: ignore[assignment]
+    HAS_CTYPES = False
+
 # ANSI color codes
 COLORS = {
     "DEBUG": "\033[90m",  # Gray
@@ -29,9 +37,9 @@ def _supports_color() -> bool:
         return False
     # Windows 10+ supports ANSI, but need to enable it
     if sys.platform == "win32":
+        if not HAS_CTYPES:
+            return False
         try:
-            import ctypes
-
             kernel32 = ctypes.windll.kernel32
             # Enable ANSI escape sequences on Windows
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)

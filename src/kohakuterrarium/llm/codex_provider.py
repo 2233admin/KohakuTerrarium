@@ -10,6 +10,14 @@ import asyncio
 import json as _json
 from typing import Any, AsyncIterator
 
+try:
+    from openai import OpenAI
+
+    HAS_OPENAI = True
+except ImportError:
+    OpenAI = None  # type: ignore[assignment,misc]
+    HAS_OPENAI = False
+
 from kohakuterrarium.llm.base import (
     BaseLLMProvider,
     ChatResponse,
@@ -79,8 +87,8 @@ class CodexOAuthProvider(BaseLLMProvider):
 
     def _rebuild_client(self) -> None:
         """Create or recreate the OpenAI SDK client with current token."""
-        from openai import OpenAI
-
+        if not HAS_OPENAI:
+            raise ImportError("openai not installed. Install with: pip install openai")
         if not self._tokens:
             return
         self._client = OpenAI(

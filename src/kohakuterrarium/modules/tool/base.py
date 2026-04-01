@@ -100,21 +100,17 @@ class ToolResult:
 
         For multimodal results, concatenates all text parts.
         """
-        from kohakuterrarium.llm.message import TextPart
-
         if isinstance(self.output, str):
             return self.output
         return "\n".join(
-            part.text for part in self.output if isinstance(part, TextPart)
+            part.text for part in self.output if getattr(part, "type", None) == "text"
         )
 
     def has_images(self) -> bool:
         """Check if result contains images."""
-        from kohakuterrarium.llm.message import ImagePart
-
         if isinstance(self.output, str):
             return False
-        return any(isinstance(part, ImagePart) for part in self.output)
+        return any(getattr(part, "type", None) == "image_url" for part in self.output)
 
     def is_multimodal(self) -> bool:
         """Check if result uses multimodal format."""

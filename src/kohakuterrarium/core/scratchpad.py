@@ -86,10 +86,6 @@ class Scratchpad:
         return f"Scratchpad(keys={list(self._data.keys())})"
 
 
-def get_scratchpad() -> Scratchpad:
-    """Get scratchpad from the default session. Prefer context.session.scratchpad."""
-    # Import inside function to avoid circular import:
-    # session.py imports Scratchpad from this module
-    from kohakuterrarium.core.session import get_session
-
-    return get_session().scratchpad
+# get_scratchpad() has moved to kohakuterrarium.core.session to avoid
+# a circular import (session.py imports Scratchpad from this module).
+# Callers should import from kohakuterrarium.core.session directly.

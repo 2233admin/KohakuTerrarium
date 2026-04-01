@@ -13,13 +13,12 @@ Supports multimodal content (text + images).
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from kohakuterrarium.llm.message import ContentPart, TextPart
+from kohakuterrarium.llm.message import ContentPart, TextPart
 
 # Type alias for event content (text or multimodal)
-EventContent = "str | list[ContentPart]"
+EventContent = str | list[ContentPart]
 
 
 @dataclass
@@ -79,8 +78,6 @@ class TriggerEvent:
         """
         if isinstance(self.content, str):
             return self.content
-        from kohakuterrarium.llm.message import TextPart
-
         return "\n".join(
             part.text for part in self.content if isinstance(part, TextPart)
         )

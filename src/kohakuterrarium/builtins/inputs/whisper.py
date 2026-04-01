@@ -28,6 +28,30 @@ from typing import Any
 
 import numpy as np
 
+try:
+    import sounddevice as sd
+
+    HAS_SOUNDDEVICE = True
+except ImportError:
+    sd = None  # type: ignore[assignment]
+    HAS_SOUNDDEVICE = False
+
+try:
+    import torch
+
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    HAS_TORCH = False
+
+try:
+    import whisper
+
+    HAS_WHISPER = True
+except ImportError:
+    whisper = None  # type: ignore[assignment]
+    HAS_WHISPER = False
+
 from kohakuterrarium.builtins.inputs.asr import ASRConfig, ASRModule, ASRResult
 from kohakuterrarium.utils.logging import get_logger
 
@@ -112,12 +136,16 @@ class WhisperASR(ASRModule):
 
     async def _load_models(self) -> None:
         """Load Whisper and VAD models."""
-        import torch
+        if not HAS_TORCH:
+            raise ImportError("torch not installed. Install with: pip install torch")
 
         # Load Whisper model
-        try:
-            import whisper
+        if not HAS_WHISPER:
+            raise ImportError(
+                "openai-whisper not installed. Install with: pip install openai-whisper"
+            )
 
+        try:
             device = self.whisper_config.device
             if device == "cuda" and not torch.cuda.is_available():
                 logger.warning("CUDA not available, falling back to CPU")
@@ -130,10 +158,8 @@ class WhisperASR(ASRModule):
             )
             logger.info("Whisper model loaded")
 
-        except ImportError as e:
-            raise ImportError(
-                "openai-whisper not installed. Install with: pip install openai-whisper"
-            ) from e
+        except Exception as e:
+            raise RuntimeError(f"Failed to load Whisper model: {e}") from e
 
         # Load Silero VAD
         try:
@@ -155,15 +181,11 @@ class WhisperASR(ASRModule):
 
     def _recording_loop(self) -> None:
         """Main recording loop (runs in separate thread)."""
-        try:
-            import sounddevice as sd
-        except ImportError as e:
+        if not HAS_SOUNDDEVICE:
             logger.error(
                 "sounddevice not installed. Install with: pip install sounddevice"
             )
             return
-
-        import torch
 
         # Audio buffer for accumulating speech
         audio_buffer: list[np.ndarray] = []
@@ -242,8 +264,6 @@ class WhisperASR(ASRModule):
 
     def _detect_speech(self, audio_chunk: np.ndarray) -> bool:
         """Detect if audio chunk contains speech."""
-        import torch
-
         if self._vad_model is not None:
             # Use Silero VAD
             try:
@@ -266,8 +286,6 @@ class WhisperASR(ASRModule):
         audio = np.concatenate(audio_buffer)
 
         # Pad/trim to 30 seconds (Whisper's expected input)
-        import whisper
-
         audio = whisper.pad_or_trim(audio)
 
         # Transcribe

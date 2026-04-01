@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any
 
+from kohakuterrarium.builtins.tools import get_builtin_tool
 from kohakuterrarium.core.controller import Controller, ControllerConfig
 from kohakuterrarium.core.events import TriggerEvent, create_user_input_event
 from kohakuterrarium.core.executor import Executor
@@ -115,8 +116,6 @@ class TestAgentBuilder:
 
         # Register builtin tools if requested
         if self._tools:
-            from kohakuterrarium.builtins.tools import get_builtin_tool
-
             for name in self._tools:
                 tool = get_builtin_tool(name)
                 if tool:

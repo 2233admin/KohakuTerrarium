@@ -18,9 +18,11 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 from uuid import uuid4
 
-from kohakuterrarium.core.channel import ChannelMessage
+from kohakuterrarium.core.channel import AgentChannel, ChannelMessage
 from kohakuterrarium.core.config import AgentConfig
+from kohakuterrarium.core.environment import Environment
 from kohakuterrarium.serving.agent_session import AgentSession
+from kohakuterrarium.session.store import SessionStore
 from kohakuterrarium.serving.events import ChannelEvent
 from kohakuterrarium.terrarium.config import (
     CreatureConfig,
@@ -171,8 +173,6 @@ class KohakuManager:
         else:
             raise ValueError("Must provide config_path or config")
 
-        from kohakuterrarium.core.environment import Environment
-
         terrarium_id = f"terrarium_{uuid4().hex[:8]}"
         env = Environment(env_id=f"terrarium_{cfg.name}_{uuid4().hex[:8]}")
         runtime = TerrariumRuntime(cfg, environment=env)
@@ -181,8 +181,6 @@ class KohakuManager:
         # Prepare session store before run (auto-attached after start inside run)
         if self._session_dir:
             try:
-                from kohakuterrarium.session.store import SessionStore
-
                 session_path = Path(self._session_dir) / f"{terrarium_id}.kt"
                 store = SessionStore(session_path)
                 store.init_meta(
@@ -502,8 +500,6 @@ class KohakuManager:
         for ch_name in observe_channels:
             ch = registry.get(ch_name)
             if ch is not None:
-                from kohakuterrarium.core.channel import AgentChannel
-
                 if isinstance(ch, AgentChannel):
                     sub = ch.subscribe(f"_stream_{source_id}_{ch_name}")
                     observer._subscriptions[ch_name] = sub

@@ -96,3 +96,13 @@ def remove_session(key: str | None = None) -> None:
 def list_sessions() -> list[str]:
     """List all active session keys."""
     return list(_sessions.keys())
+
+
+def get_scratchpad() -> Scratchpad:
+    """Get scratchpad from the default session. Prefer context.session.scratchpad."""
+    return get_session().scratchpad
+
+
+def get_channel_registry() -> ChannelRegistry:
+    """Get channels from the default session. Prefer context.session.channels."""
+    return get_session().channels

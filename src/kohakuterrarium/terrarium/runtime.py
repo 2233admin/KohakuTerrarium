@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from kohakuterrarium.builtins.inputs.none import NoneInput
+from kohakuterrarium.builtins.tools.registry import get_builtin_tool
 from kohakuterrarium.terrarium.tool_manager import (
     TERRARIUM_MANAGER_KEY,
     TerrariumToolManager,
@@ -371,8 +372,6 @@ class TerrariumRuntime(HotPlugMixin):
     @staticmethod
     def _force_register_terrarium_tools(agent: Agent) -> None:
         """Force-register all terrarium management tools on the root agent."""
-        from kohakuterrarium.builtins.tools.registry import get_builtin_tool
-
         terrarium_tool_names = [
             "terrarium_create",
             "terrarium_status",

@@ -373,10 +373,6 @@ class ChannelRegistry:
 Channel = SubAgentChannel
 
 
-def get_channel_registry() -> ChannelRegistry:
-    """Get channels from the default session. Prefer context.session.channels."""
-    # Import inside function to avoid circular import:
-    # session.py imports ChannelRegistry from this module
-    from kohakuterrarium.core.session import get_session
-
-    return get_session().channels
+# get_channel_registry() has moved to kohakuterrarium.core.session to avoid
+# a circular import (session.py imports ChannelRegistry from this module).
+# Callers should import from kohakuterrarium.core.session directly.

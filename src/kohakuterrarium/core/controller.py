@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 if TYPE_CHECKING:
     from kohakuterrarium.llm.base import ToolSchema
-    from kohakuterrarium.llm.message import ContentPart
 
+from kohakuterrarium.llm.message import ContentPart, ImagePart, TextPart
+from kohakuterrarium.llm.tools import build_tool_schemas
 from kohakuterrarium.parsing import (
     CommandEvent,
     CommandResultEvent,
@@ -41,8 +42,9 @@ from kohakuterrarium.core.executor import Executor
 from kohakuterrarium.core.job import JobResult, JobStatus, JobStore
 from kohakuterrarium.core.registry import Registry
 from kohakuterrarium.llm.base import LLMProvider
-from kohakuterrarium.utils.logging import get_logger
 from kohakuterrarium.modules.tool.base import ToolInfo
+from kohakuterrarium.parsing.format import BRACKET_FORMAT, XML_FORMAT
+from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -197,8 +199,6 @@ class Controller:
 
     def _get_parser(self) -> StreamParser:
         """Get parser with current registry tools, sub-agents, and outputs."""
-        from kohakuterrarium.parsing.format import BRACKET_FORMAT, XML_FORMAT
-
         # Build config from current registry state
         known_tools = set(self.registry.list_tools())
         known_subagents = set(self.registry.list_subagents())
@@ -224,8 +224,6 @@ class Controller:
 
     def _get_native_tool_schemas(self) -> "list[ToolSchema]":
         """Build native tool schemas from registry."""
-        from kohakuterrarium.llm.tools import build_tool_schemas
-
         return build_tool_schemas(self.registry)
 
     def _setup_system_prompt(self) -> None:
@@ -299,8 +297,6 @@ class Controller:
 
         Returns multimodal content if any event has images.
         """
-        from kohakuterrarium.llm.message import ContentPart, ImagePart, TextPart
-
         text_parts: list[str] = []
         image_parts: list[ImagePart] = []
         has_multimodal = False
@@ -355,8 +351,6 @@ class Controller:
         logger.debug("Processing events", count=len(events))
 
         # Build context with job status
-        from kohakuterrarium.llm.message import ContentPart, ImagePart, TextPart
-
         text_context_parts: list[str] = []
         image_context_parts: list[ImagePart] = []
 

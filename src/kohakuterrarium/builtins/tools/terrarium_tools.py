@@ -14,14 +14,15 @@ from uuid import uuid4
 
 from kohakuterrarium.builtins.tools.registry import register_builtin
 from kohakuterrarium.core.channel import ChannelMessage
-from kohakuterrarium.modules.trigger.channel import ChannelTrigger
 from kohakuterrarium.modules.tool.base import (
     BaseTool,
     ExecutionMode,
     ToolContext,
     ToolResult,
 )
+from kohakuterrarium.modules.trigger.channel import ChannelTrigger
 from kohakuterrarium.terrarium.config import CreatureConfig, load_terrarium_config
+from kohakuterrarium.terrarium.runtime import TerrariumRuntime
 from kohakuterrarium.terrarium.tool_manager import (
     TERRARIUM_MANAGER_KEY,
     TerrariumToolManager,
@@ -88,9 +89,6 @@ class TerrariumCreateTool(BaseTool):
             return ToolResult(error="config_path is required")
 
         try:
-            # Circular import: builtins.tools <-> terrarium.runtime
-            from kohakuterrarium.terrarium.runtime import TerrariumRuntime
-
             config = load_terrarium_config(config_path)
             runtime = TerrariumRuntime(config)
             terrarium_id = f"{config.name}_{uuid4().hex[:6]}"

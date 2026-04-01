@@ -20,6 +20,8 @@ Usage:
     await asr.stop()
 """
 
+import asyncio
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -181,8 +183,6 @@ class ASRModule(InputModule, ABC):
         except Exception as e:
             logger.error("ASR transcription error", error=str(e))
             self._state = ASRState.ERROR
-            import asyncio
-
             await asyncio.sleep(0.5)
             self._state = ASRState.LISTENING
 
@@ -258,12 +258,8 @@ class DummyASR(ASRModule):
         logger.debug("DummyASR stopped")
 
     async def _transcribe(self) -> ASRResult | None:
-        import asyncio
-
         if self.use_stdin:
             # Read from stdin (blocking, run in thread)
-            import sys
-
             loop = asyncio.get_event_loop()
             text = await loop.run_in_executor(None, sys.stdin.readline)
             text = text.strip()
