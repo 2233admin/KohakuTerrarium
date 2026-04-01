@@ -104,6 +104,9 @@ class AgentHandlersMixin:
         # Notify output modules that processing is starting (e.g., typing indicator)
         await self.output_router.on_processing_start()
 
+        # Accumulate all text output across loop iterations (for idle notification)
+        all_round_text: list[str] = []
+
         # =======================================================================
         # Job Tracking: pending_*_ids lists track jobs across loop iterations.
         # Jobs stay in these lists until their results are reported to model.
@@ -195,17 +198,23 @@ class AgentHandlersMixin:
                         if short_id
                         else parse_event.name
                     )
+                    # Build truncated preview for human-readable detail
+                    full_args = {}
                     arg_preview = ""
                     if parse_event.args:
                         arg_parts = []
                         for k, v in parse_event.args.items():
+                            if k.startswith("_"):
+                                continue
+                            full_args[k] = v
                             v_str = str(v)[:40]
                             arg_parts.append(f"{k}={v_str}")
-                        arg_preview = " ".join(arg_parts)[:60]
+                        arg_preview = " ".join(arg_parts)[:80]
                     bg_tag = " (bg)" if not is_direct else ""
-                    self.output_router.default_output.on_activity(
+                    self.output_router.notify_activity(
                         "tool_start",
                         f"[{label}]{bg_tag} {arg_preview}",
+                        metadata={"job_id": job_id, "args": full_args},
                     )
                 elif isinstance(parse_event, SubAgentCallEvent):
                     # Extract tool_call_id (native mode)
@@ -234,21 +243,23 @@ class AgentHandlersMixin:
                         if sa_short_id
                         else parse_event.name
                     )
-                    task_preview = parse_event.args.get("task", "")[:60]
-                    self.output_router.default_output.on_activity(
+                    full_task = parse_event.args.get("task", "")
+                    task_preview = full_task[:60]
+                    self.output_router.notify_activity(
                         "subagent_start",
                         f"[{sa_label}] {task_preview}",
+                        metadata={"job_id": job_id, "task": full_task},
                     )
                 elif isinstance(parse_event, CommandResultEvent):
                     # Command results are internal feedback for the LLM,
                     # NOT user-facing output. Route to activity/logs only.
                     if parse_event.error:
-                        self.output_router.default_output.on_activity(
+                        self.output_router.notify_activity(
                             "command_error",
                             f"[{parse_event.command}] {parse_event.error}",
                         )
                     else:
-                        self.output_router.default_output.on_activity(
+                        self.output_router.notify_activity(
                             "command_done",
                             f"[{parse_event.command}] OK",
                         )
@@ -257,6 +268,9 @@ class AgentHandlersMixin:
                     if isinstance(parse_event, TextEvent):
                         round_text_output.append(parse_event.text)
                     await self.output_router.route(parse_event)
+
+            # Accumulate text across iterations
+            all_round_text.extend(round_text_output)
 
             # ===================================================================
             # Termination check (between PHASE 2 and PHASE 3)
@@ -353,6 +367,27 @@ class AgentHandlersMixin:
         if hasattr(self.output_router.default_output, "reset"):
             self.output_router.default_output.reset()
 
+        # Check if this was a channel-triggered event and whether we sent
+        # to any channel. If not, notify the output that the creature
+        # processed a channel message without sending to any channel.
+        trigger_channel = event.context.get("channel") if event.context else None
+        trigger_sender = event.context.get("sender") if event.context else None
+        if trigger_channel and trigger_sender:
+            # Collect text output from this round for the notification
+            round_output = "".join(all_round_text).strip()
+            if round_output:
+                # Truncate for notification
+                preview = round_output[:500]
+                self.output_router.notify_activity(
+                    "processing_complete",
+                    f"Processed message from {trigger_channel}",
+                    metadata={
+                        "trigger_channel": trigger_channel,
+                        "trigger_sender": trigger_sender,
+                        "output_preview": preview,
+                    },
+                )
+
         # Notify output modules that processing has ended
         await self.output_router.on_processing_end()
 
@@ -444,20 +479,18 @@ class AgentHandlersMixin:
 
             if isinstance(result, Exception):
                 content = f"Error: {result}"
-                self.output_router.default_output.on_activity(
+                self.output_router.notify_activity(
                     "tool_error", f"[{label}] FAILED: {result}"
                 )
             elif result is not None and result.error:
                 content = f"Error: {result.error}"
-                self.output_router.default_output.on_activity(
+                self.output_router.notify_activity(
                     "tool_error", f"[{label}] ERROR: {result.error}"
                 )
             elif result is not None:
                 content = result.output if result.output else ""
                 status = "OK" if result.exit_code == 0 else f"exit={result.exit_code}"
-                self.output_router.default_output.on_activity(
-                    "tool_done", f"[{label}] {status}"
-                )
+                self.output_router.notify_activity("tool_done", f"[{label}] {status}")
             else:
                 content = ""
 
@@ -503,7 +536,7 @@ class AgentHandlersMixin:
             if isinstance(result, Exception):
                 result_strs.append(f"## {job_id} - FAILED\n{str(result)}")
                 logger.info("Tool %s: failed", tool_name)
-                self.output_router.default_output.on_activity(
+                self.output_router.notify_activity(
                     "tool_error", f"[{label}] FAILED: {result}"
                 )
             elif result is not None:
@@ -511,7 +544,7 @@ class AgentHandlersMixin:
                 if result.error:
                     result_strs.append(f"## {job_id} - ERROR\n{result.error}\n{output}")
                     logger.info("Tool %s: error", tool_name)
-                    self.output_router.default_output.on_activity(
+                    self.output_router.notify_activity(
                         "tool_error", f"[{label}] ERROR: {result.error}"
                     )
                 else:
@@ -520,7 +553,7 @@ class AgentHandlersMixin:
                     )
                     result_strs.append(f"## {job_id} - {status}\n{output}")
                     logger.info("Tool %s: done", tool_name)
-                    self.output_router.default_output.on_activity(
+                    self.output_router.notify_activity(
                         "tool_done", f"[{label}] {status}"
                     )
 
@@ -560,19 +593,59 @@ class AgentHandlersMixin:
             return
 
         job_id = getattr(event, "job_id", "")
-        tool_name = job_id.rsplit("_", 1)[0] if "_" in job_id else job_id
-        short_id = job_id.rsplit("_", 1)[-1][:6] if "_" in job_id else ""
-        label = f"{tool_name}[{short_id}]" if short_id else tool_name
-
+        is_subagent = job_id.startswith("agent_")
         error = event.context.get("error") if event.context else None
+        content = (
+            event.content if isinstance(event.content, str) else str(event.content)
+        )
+
+        # Build label: for sub-agents use the agent name, for tools use tool name
+        if is_subagent:
+            # job_id format: "agent_<name>_<hex>" e.g. "agent_explore_5c3c56e6"
+            parts = job_id.split("_")
+            sa_name = parts[1] if len(parts) >= 3 else job_id
+            short_id = parts[-1][:6] if len(parts) >= 3 else ""
+            label = f"{sa_name}[{short_id}]" if short_id else sa_name
+            activity_type_done = "subagent_done"
+            activity_type_error = "subagent_error"
+        else:
+            tool_name = job_id.rsplit("_", 1)[0] if "_" in job_id else job_id
+            short_id = job_id.rsplit("_", 1)[-1][:6] if "_" in job_id else ""
+            label = f"{tool_name}[{short_id}]" if short_id else tool_name
+            activity_type_done = "tool_done"
+            activity_type_error = "tool_error"
+
+        # Extract sub-agent metadata if available
+        sa_meta = event.context.get("subagent_metadata", {}) if event.context else {}
+        tools_used = sa_meta.get("tools_used", [])
+
         if error:
-            self.output_router.default_output.on_activity(
-                "tool_error", f"[{label}] ERROR: {error}"
+            self.output_router.notify_activity(
+                activity_type_error,
+                f"[{label}] ERROR: {error}",
+                metadata={"job_id": job_id},
             )
         else:
-            self.output_router.default_output.on_activity(
-                "tool_done", f"[{label}] DONE"
-            )
+            if is_subagent:
+                tools_summary = ", ".join(tools_used[:10]) if tools_used else "none"
+                detail = f"[{label}] tools: {tools_summary}"
+                self.output_router.notify_activity(
+                    activity_type_done,
+                    detail,
+                    metadata={
+                        "job_id": job_id,
+                        "tools_used": tools_used,
+                        "result": content,
+                        "turns": sa_meta.get("turns", 0),
+                        "duration": sa_meta.get("duration", 0),
+                    },
+                )
+            else:
+                self.output_router.notify_activity(
+                    activity_type_done,
+                    f"[{label}] DONE",
+                    metadata={"job_id": job_id},
+                )
 
         logger.info("Background job completed", job_id=job_id)
         asyncio.create_task(self._process_event(event))
