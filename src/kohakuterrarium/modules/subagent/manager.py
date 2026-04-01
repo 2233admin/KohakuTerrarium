@@ -86,6 +86,8 @@ class SubAgentManager:
 
         # Completion callback (wired by agent to deliver results as events)
         self._on_complete: Callable[[Any], None] | None = None
+        # Callback: (subagent_name, activity_type, tool_name, detail) -> None
+        self._on_tool_activity: Callable[[str, str, str, str], None] | None = None
 
         # Registered sub-agent configs
         self._configs: dict[str, SubAgentConfig] = {}
@@ -231,6 +233,16 @@ class SubAgentManager:
             tool_format=effective_tool_format,
         )
 
+        # Forward sub-agent tool activity to parent's callback
+        if self._on_tool_activity:
+            sa_name = name
+            parent_cb = self._on_tool_activity
+
+            def _forward_activity(activity_type, tool_name, detail):
+                parent_cb(sa_name, activity_type, tool_name, detail)
+
+            subagent.on_tool_activity = _forward_activity
+
         # Create job wrapper
         job = SubAgentJob(subagent, job_id)
         self._jobs[job_id] = job
@@ -310,6 +322,14 @@ class SubAgentManager:
                     content=result.output or "",
                     error=result.error,
                 )
+                # Attach sub-agent metadata (tools_used, turns, duration)
+                if event.context is None:
+                    event.context = {}
+                event.context["subagent_metadata"] = {
+                    "tools_used": result.metadata.get("tools_used", []),
+                    "turns": result.turns,
+                    "duration": result.duration,
+                }
                 self._on_complete(event)
 
             return result

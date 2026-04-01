@@ -164,6 +164,10 @@ class SubAgent:
         self.agent_path = agent_path
         self.tool_format = tool_format
 
+        # Optional callback for reporting tool activity to parent
+        # Signature: on_tool_activity(activity_type: str, tool_name: str, detail: str)
+        self.on_tool_activity: Any = None
+
         # Create limited registry with only allowed tools
         self.registry = self._create_limited_registry()
 
@@ -346,6 +350,7 @@ class SubAgent:
             native_tool_schemas = build_tool_schemas(self.registry)
 
         output_parts: list[str] = []
+        tools_used: list[str] = []  # Track all tool calls for metadata
 
         # Run conversation loop (0 = unlimited turns)
         while self.config.max_turns == 0 or self._turns < self.config.max_turns:
@@ -458,7 +463,26 @@ class SubAgent:
                 tool_count=len(tool_calls),
                 tools=[tc.name for tc in tool_calls],
             )
+            tools_used.extend(tc.name for tc in tool_calls)
+
+            # Notify parent of tool starts
+            if self.on_tool_activity:
+                for tc in tool_calls:
+                    args_preview = ""
+                    tc_args = {
+                        k: v for k, v in tc.args.items() if not k.startswith("_")
+                    }
+                    if tc_args:
+                        parts = [f"{k}={str(v)[:80]}" for k, v in tc_args.items()]
+                        args_preview = " ".join(parts)[:120]
+                    self.on_tool_activity("tool_start", tc.name, args_preview)
+
             tool_results = await self._execute_tools(tool_calls)
+
+            # Notify parent of tool completions
+            if self.on_tool_activity:
+                for tc in tool_calls:
+                    self.on_tool_activity("tool_done", tc.name, "")
 
             # Add tool results to conversation
             if self._is_native:
@@ -493,6 +517,7 @@ class SubAgent:
             success=True,
             turns=self._turns,
             duration=self._calculate_duration(),
+            metadata={"tools_used": tools_used},
         )
 
     async def _execute_tools(self, tool_calls: list[ToolCallEvent]) -> str:
