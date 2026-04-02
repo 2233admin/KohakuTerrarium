@@ -109,6 +109,66 @@ class StdoutOutput(BaseOutputModule):
         self._has_output = False
         self._streaming = False
 
+    async def on_resume(self, events: list[dict]) -> None:
+        """Show condensed session history on resume."""
+        if not events:
+            return
+
+        # Group events into processing cycles (user_input -> processing_end)
+        turns: list[dict] = []
+        current: dict = {"user": "", "text": "", "tools": []}
+
+        for evt in events:
+            etype = evt.get("type", "")
+            if etype == "user_input":
+                if current["user"] or current["text"]:
+                    turns.append(current)
+                current = {
+                    "user": evt.get("content", ""),
+                    "text": "",
+                    "tools": [],
+                }
+            elif etype == "trigger_fired":
+                if current["user"] or current["text"]:
+                    turns.append(current)
+                channel = evt.get("channel", "")
+                sender = evt.get("sender", "")
+                current = {
+                    "user": f"[trigger: {channel} from {sender}]",
+                    "text": "",
+                    "tools": [],
+                }
+            elif etype == "text":
+                current["text"] += evt.get("content", "")
+            elif etype == "tool_call":
+                name = evt.get("name", "tool")
+                if name not in current["tools"]:
+                    current["tools"].append(name)
+
+        if current["user"] or current["text"]:
+            turns.append(current)
+
+        if not turns:
+            return
+
+        sys.stdout.write(f"\n--- Resumed session ({len(turns)} turns) ---\n")
+        for turn in turns:
+            if turn["user"]:
+                user_preview = turn["user"][:120]
+                if len(turn["user"]) > 120:
+                    user_preview += "..."
+                sys.stdout.write(f"You: {user_preview}\n")
+            if turn["text"]:
+                text_preview = turn["text"].strip()[:200]
+                if len(turn["text"].strip()) > 200:
+                    text_preview += "..."
+                tools_str = ""
+                if turn["tools"]:
+                    tools_str = f" [used {', '.join(turn['tools'])}]"
+                sys.stdout.write(f"Assistant:{tools_str} {text_preview}\n")
+        sys.stdout.write("--- End of history ---\n\n")
+        sys.stdout.flush()
+
 
 class PrefixedStdoutOutput(StdoutOutput):
     """

@@ -115,6 +115,7 @@ class AgentTUI(App):
         self._input_ready = asyncio.Event()
         self._input_value: str = ""
         self._stop_event = asyncio.Event()
+        self._mounted_event = asyncio.Event()
         self._thinking_active = False
         self._thinking_thread: threading.Thread | None = None
 
@@ -148,6 +149,7 @@ class AgentTUI(App):
             )
         )
         self._set_status_text(IDLE_STATUS)
+        self._mounted_event.set()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle Enter in input box."""
@@ -273,6 +275,19 @@ class TUISession:
         activity display.
         """
         self._safe_write("output-log", content)
+
+    async def wait_ready(self, timeout: float = 5.0) -> bool:
+        """Wait for the Textual app to be mounted and ready for writes.
+
+        Returns True if ready, False on timeout.
+        """
+        if not self._app:
+            return False
+        try:
+            await asyncio.wait_for(self._app._mounted_event.wait(), timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
 
     async def start(self, prompt: str = "You: ") -> None:
         """Create the Textual app."""

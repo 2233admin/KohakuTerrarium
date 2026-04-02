@@ -91,6 +91,12 @@ def resume_agent(
             agent.session.scratchpad.set(k, v)
         logger.info("Scratchpad restored", agent=agent_name, keys=len(pad_data))
 
+    # Load events for output replay on resume
+    resume_events = store.get_events(agent_name)
+    if resume_events:
+        agent._pending_resume_events = resume_events
+        logger.info("Resume events loaded", agent=agent_name, count=len(resume_events))
+
     # Re-attach session store for continued recording
     store.update_status("running")
     agent.attach_session_store(store)
@@ -137,14 +143,19 @@ def resume_terrarium(
     # Prepare resume data (injected during attach_session_store in run())
     agents = meta.get("agents", [])
     resume_data = {}
+    resume_events = {}
     for name in agents:
         resume_data[name] = {
             "conversation": store.load_conversation(name),
             "scratchpad": store.load_scratchpad(name),
         }
+        events = store.get_events(name)
+        if events:
+            resume_events[name] = events
 
     runtime._pending_session_store = store
     runtime._pending_resume_data = resume_data
+    runtime._pending_resume_events = resume_events
 
     store.update_status("running")
 

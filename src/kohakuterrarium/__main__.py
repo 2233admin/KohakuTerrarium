@@ -58,8 +58,13 @@ def main() -> int:
         "--session",
         nargs="?",
         const="__auto__",
-        default=None,
-        help="Enable session persistence (optionally specify .kt file path)",
+        default="__auto__",
+        help="Session file path (default: auto in ~/.kohakuterrarium/sessions/). Use --no-session to disable.",
+    )
+    run_parser.add_argument(
+        "--no-session",
+        action="store_true",
+        help="Disable session persistence",
     )
 
     # List command
@@ -82,9 +87,9 @@ def main() -> int:
 
     # Resume command
     resume_parser = subparsers.add_parser(
-        "resume", help="Resume from a .kt session file"
+        "resume", help="Resume from a .kohakutr session file"
     )
-    resume_parser.add_argument("session_path", help="Path to .kt session file")
+    resume_parser.add_argument("session_path", help="Path to .kohakutr session file")
     resume_parser.add_argument("--pwd", help="Override working directory")
     resume_parser.add_argument(
         "--log-level",
@@ -103,7 +108,8 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "run":
-        return run_agent_cli(args.agent_path, args.log_level, session=args.session)
+        session = None if args.no_session else args.session
+        return run_agent_cli(args.agent_path, args.log_level, session=session)
     elif args.command == "resume":
         return resume_cli(args.session_path, args.pwd, args.log_level)
     elif args.command == "list":
@@ -117,6 +123,9 @@ def main() -> int:
     else:
         parser.print_help()
         return 0
+
+
+_SESSION_DIR = Path.home() / ".kohakuterrarium" / "sessions"
 
 
 def run_agent_cli(agent_path: str, log_level: str, session: str | None = None) -> int:
@@ -139,17 +148,19 @@ def run_agent_cli(agent_path: str, log_level: str, session: str | None = None) -
             return 1
 
     store = None
+    session_file = None
     try:
         # Create agent
         agent = Agent.from_path(str(path))
 
-        # Attach session store if requested
+        # Attach session store (default: ON)
         if session is not None:
             if session == "__auto__":
-                # Auto-generate path
-                session_dir = Path(".kohaku/sessions")
-                session_dir.mkdir(parents=True, exist_ok=True)
-                session_file = session_dir / f"{agent.config.name}_{id(agent):08x}.kt"
+                _SESSION_DIR.mkdir(parents=True, exist_ok=True)
+                session_file = (
+                    _SESSION_DIR
+                    / f"{agent.config.name}_{id(agent):08x}.kohakutr"
+                )
             else:
                 session_file = Path(session)
 
@@ -162,7 +173,6 @@ def run_agent_cli(agent_path: str, log_level: str, session: str | None = None) -
                 agents=[agent.config.name],
             )
             agent.attach_session_store(store)
-            print(f"Session: {session_file}")
 
         asyncio.run(agent.run())
         return 0
@@ -175,10 +185,13 @@ def run_agent_cli(agent_path: str, log_level: str, session: str | None = None) -
     finally:
         if store:
             store.close()
+        if session_file and session_file.exists():
+            print(f"\nSession saved. To resume:")
+            print(f"  kt resume {session_file}")
 
 
 def resume_cli(session_path: str, pwd_override: str | None, log_level: str) -> int:
-    """Resume an agent or terrarium from a .kt session file."""
+    """Resume an agent or terrarium from a session file."""
     set_level(log_level)
 
     path = Path(session_path)
@@ -192,11 +205,9 @@ def resume_cli(session_path: str, pwd_override: str | None, log_level: str) -> i
     try:
         if session_type == "terrarium":
             runtime, store = resume_terrarium(path, pwd_override)
-            print(f"Resuming terrarium from {path}")
             asyncio.run(runtime.run())
         else:
             agent, store = resume_agent(path, pwd_override)
-            print(f"Resuming agent from {path}")
             asyncio.run(agent.run())
         return 0
     except KeyboardInterrupt:
@@ -208,6 +219,9 @@ def resume_cli(session_path: str, pwd_override: str | None, log_level: str) -> i
     finally:
         if store:
             store.close()
+        if path.exists():
+            print(f"\nSession saved. To resume:")
+            print(f"  kt resume {path}")
 
 
 def list_agents_cli(agents_path: str) -> int:

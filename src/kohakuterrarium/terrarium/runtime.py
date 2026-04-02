@@ -324,6 +324,18 @@ class TerrariumRuntime(HotPlugMixin):
 
             self._pending_resume_data = None
 
+        # Set resume events on root agent for output replay
+        if (
+            hasattr(self, "_pending_resume_events")
+            and self._pending_resume_events
+            and self._root_agent is not None
+        ):
+            root_events = self._pending_resume_events.get("root")
+            if root_events:
+                self._root_agent._pending_resume_events = root_events
+                logger.info("Resume events set on root agent", count=len(root_events))
+            self._pending_resume_events = None
+
         logger.info(
             "Session store attached to terrarium",
             creatures=list(self._creatures.keys()),

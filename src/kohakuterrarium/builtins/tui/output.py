@@ -3,6 +3,7 @@
 import re
 from typing import Any
 
+from rich.panel import Panel
 from rich.text import Text
 
 from kohakuterrarium.builtins.tui.session import TUISession
@@ -116,6 +117,112 @@ class TUIOutput(BaseOutputModule):
         if inline:
             self._ensure_turn_started()
             self._tui.write_to_output(inline)
+
+    async def on_resume(self, events: list[dict]) -> None:
+        """Render session history in the TUI output pane."""
+        if not self._tui or not events:
+            return
+
+        # Wait for Textual app to be mounted (writes are dropped before mount)
+        await self._tui.wait_ready()
+
+        # Group events into processing cycles
+        cycles: list[dict] = []
+        current: dict | None = None
+
+        for evt in events:
+            etype = evt.get("type", "")
+
+            if etype in ("user_input", "trigger_fired"):
+                if current:
+                    cycles.append(current)
+                if etype == "user_input":
+                    label = evt.get("content", "")
+                else:
+                    ch = evt.get("channel", "")
+                    sender = evt.get("sender", "")
+                    label = f"[{ch}] from {sender}: {evt.get('content', '')}"
+                current = {
+                    "input_type": etype,
+                    "input": label,
+                    "text_parts": [],
+                    "activities": [],
+                }
+            elif current is not None:
+                if etype == "text":
+                    current["text_parts"].append(evt.get("content", ""))
+                elif etype == "tool_call":
+                    name = evt.get("name", "tool")
+                    current["activities"].append(("tool_start", name))
+                elif etype == "tool_result":
+                    name = evt.get("name", "tool")
+                    error = evt.get("error")
+                    if error:
+                        current["activities"].append(("tool_error", name))
+                    else:
+                        current["activities"].append(("tool_done", name))
+                elif etype == "subagent_call":
+                    name = evt.get("name", "subagent")
+                    current["activities"].append(("subagent_start", name))
+                elif etype == "subagent_result":
+                    name = evt.get("name", "subagent")
+                    current["activities"].append(("subagent_done", name))
+
+        if current:
+            cycles.append(current)
+
+        if not cycles:
+            return
+
+        # Write a "resumed" header
+        header = Text()
+        header.append(f"  Resumed session ({len(cycles)} turns)  ", style="bold dim")
+        self._tui.write_to_output(header)
+        self._tui.write_to_output("")
+
+        # Render each cycle
+        for cycle in cycles:
+            # User input panel (same style as TUI's on_input_submitted)
+            if cycle["input_type"] == "user_input":
+                self._tui.write_to_output(
+                    Panel(
+                        cycle["input"],
+                        title="You",
+                        title_align="left",
+                        border_style="cyan",
+                    )
+                )
+            else:
+                self._tui.write_to_output(
+                    Panel(
+                        cycle["input"],
+                        title="Trigger",
+                        title_align="left",
+                        border_style="yellow",
+                    )
+                )
+
+            # Assistant turn: activities + text
+            self._tui.begin_assistant_turn()
+
+            for activity_type, name in cycle["activities"]:
+                inline = self._format_activity_inline(
+                    activity_type, f"[{name}]"
+                )
+                if inline:
+                    self._tui.write_to_output(inline)
+
+            full_text = "".join(cycle["text_parts"]).strip()
+            if full_text:
+                self._tui.write_output(full_text)
+
+            self._tui.end_assistant_turn()
+
+        # Final separator
+        sep = Text()
+        sep.append("  End of history  ", style="bold dim")
+        self._tui.write_to_output(sep)
+        self._tui.write_to_output("")
 
     @staticmethod
     def _parse_detail_bracket(detail: str) -> tuple[str, str]:

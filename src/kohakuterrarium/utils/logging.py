@@ -294,3 +294,36 @@ def disable_tui_logging() -> None:
         _handler = _original_handler
         root_logger.addHandler(_handler)
         _original_handler = None
+
+
+def suppress_logging() -> None:
+    """Suppress framework logs from stderr (for inline TUI mode).
+
+    Removes the stderr handler so logs don't interfere with inline output.
+    Call restore_logging() to bring it back.
+    """
+    global _handler, _original_handler
+
+    root_logger = logging.getLogger("kohakuterrarium")
+
+    if _handler:
+        _original_handler = _handler
+        root_logger.removeHandler(_handler)
+        # Install a NullHandler so logging doesn't complain
+        _handler = logging.NullHandler()
+        root_logger.addHandler(_handler)
+
+
+def restore_logging() -> None:
+    """Restore stderr logging after suppress_logging()."""
+    global _handler, _original_handler
+
+    root_logger = logging.getLogger("kohakuterrarium")
+
+    if _handler:
+        root_logger.removeHandler(_handler)
+
+    if _original_handler:
+        _handler = _original_handler
+        root_logger.addHandler(_handler)
+        _original_handler = None

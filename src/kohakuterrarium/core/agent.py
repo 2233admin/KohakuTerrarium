@@ -128,6 +128,7 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
         # Session persistence (set externally via attach_session_store)
         self.session_store: Any = None
         self._session_output: Any = None
+        self._pending_resume_events: list[dict] | None = None
 
         # Environment and session (explicit or auto-created in _init_executor)
         self.environment: Environment | None = environment
@@ -257,6 +258,11 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
         await self.start()
 
         try:
+            # Replay session history to output if resuming
+            if self._pending_resume_events:
+                await self.output_router.on_resume(self._pending_resume_events)
+                self._pending_resume_events = None
+
             # Fire startup trigger if configured
             await self._fire_startup_trigger()
 

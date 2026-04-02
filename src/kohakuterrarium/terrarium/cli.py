@@ -52,8 +52,13 @@ def add_terrarium_subparser(subparsers: argparse._SubParsersAction) -> None:
         "--session",
         nargs="?",
         const="__auto__",
-        default=None,
-        help="Enable session persistence (optionally specify .kt file path)",
+        default="__auto__",
+        help="Session file path (default: auto in ~/.kohakuterrarium/sessions/)",
+    )
+    run_p.add_argument(
+        "--no-session",
+        action="store_true",
+        help="Disable session persistence",
     )
 
     # terrarium info <path>
@@ -97,13 +102,20 @@ def _run_terrarium_cli(args: argparse.Namespace) -> int:
 
     # Session store setup
     session_arg = getattr(args, "session", None)
+    no_session = getattr(args, "no_session", False)
+    if no_session:
+        session_arg = None
     store = None
     session_file = None
+
+    _session_dir = Path.home() / ".kohakuterrarium" / "sessions"
+
     if session_arg is not None:
         if session_arg == "__auto__":
-            session_dir = Path(".kohaku/sessions")
-            session_dir.mkdir(parents=True, exist_ok=True)
-            session_file = session_dir / f"{config.name}_{id(config):08x}.kt"
+            _session_dir.mkdir(parents=True, exist_ok=True)
+            session_file = (
+                _session_dir / f"{config.name}_{id(config):08x}.kohakutr"
+            )
         else:
             session_file = Path(session_arg)
 
@@ -129,7 +141,6 @@ def _run_terrarium_cli(args: argparse.Namespace) -> int:
                 for c in config.creatures
             ],
         )
-        print(f"Session: {session_file}")
 
     # When root agent is configured, it handles all user interaction
     if config.root:
@@ -153,6 +164,9 @@ def _run_terrarium_cli(args: argparse.Namespace) -> int:
         finally:
             if store:
                 store.close()
+            if session_file and session_file.exists():
+                print(f"\nSession saved. To resume:")
+                print(f"  kt resume {session_file}")
 
     # No root agent: basic seed/observe CLI
     seed_prompt = args.seed

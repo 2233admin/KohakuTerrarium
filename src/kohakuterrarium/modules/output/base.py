@@ -66,6 +66,21 @@ class OutputModule(Protocol):
         """
         ...
 
+    async def on_resume(self, events: list[dict]) -> None:
+        """Called during session resume with historical events.
+
+        Output modules that render to users (TUI, stdout) can implement
+        this to show previous conversation history. Default is no-op.
+
+        Args:
+            events: List of event dicts from SessionStore.get_events().
+                    Each has at minimum {type, ts}. Common types:
+                    user_input (content), text (content),
+                    tool_call (name, args), tool_result (name, output),
+                    processing_start, processing_end.
+        """
+        ...
+
 
 class BaseOutputModule(ABC):
     """
@@ -124,4 +139,8 @@ class BaseOutputModule(ABC):
 
     def on_activity(self, activity_type: str, detail: str) -> None:
         """Called when tool/subagent activity occurs. Default is no-op."""
+        pass
+
+    async def on_resume(self, events: list[dict]) -> None:
+        """Called during session resume with historical events. Default is no-op."""
         pass

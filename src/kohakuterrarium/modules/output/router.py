@@ -350,6 +350,15 @@ class OutputRouter:
         for output in self.named_outputs.values():
             await output.flush()
 
+    async def on_resume(self, events: list[dict]) -> None:
+        """Replay session history to user-facing outputs.
+
+        Forwards to default output only (not secondary outputs,
+        since those are observers like SessionOutput/StreamOutput).
+        """
+        if hasattr(self.default_output, "on_resume"):
+            await self.default_output.on_resume(events)
+
     async def on_processing_start(self) -> None:
         """Notify all output modules that processing is starting."""
         await self.default_output.on_processing_start()
