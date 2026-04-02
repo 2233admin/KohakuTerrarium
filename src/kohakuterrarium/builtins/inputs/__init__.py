@@ -10,14 +10,12 @@ Contains:
 from typing import Any
 
 from kohakuterrarium.builtins.inputs.cli import CLIInput, NonBlockingCLIInput
-from kohakuterrarium.builtins.inputs.inline import InlineInput
 from kohakuterrarium.builtins.inputs.none import NoneInput
 
 # Registry of builtin input types
 _BUILTIN_INPUTS: dict[str, type] = {
     "cli": CLIInput,
     "cli_nonblocking": NonBlockingCLIInput,
-    "inline": InlineInput,
     "none": NoneInput,
 }
 
@@ -111,7 +109,6 @@ __all__ = [
     # Implementations
     "CLIInput",
     "NonBlockingCLIInput",
-    "InlineInput",
     "NoneInput",
     "TUIInput",
 ]

@@ -103,7 +103,7 @@ def main() -> int:
     )
     resume_parser.add_argument(
         "--mode",
-        choices=["cli", "inline", "tui"],
+        choices=["cli", "tui"],
         default=None,
         help="Override input/output mode (cli=stdout, inline=rich+prompt_toolkit, tui=textual)",
     )

@@ -19,7 +19,7 @@ from kohakuterrarium.utils.logging import get_logger
 logger = get_logger(__name__)
 
 # Valid IO modes and their module types
-IO_MODES = ("cli", "inline", "tui")
+IO_MODES = ("cli", "tui")
 
 
 def _create_io_modules(
@@ -35,11 +35,6 @@ def _create_io_modules(
     match mode:
         case "cli":
             return create_builtin_input("cli", {}), create_builtin_output("stdout", {})
-        case "inline":
-            return (
-                create_builtin_input("inline", {}),
-                create_builtin_output("inline", {}),
-            )
         case "tui":
             return create_builtin_input("tui", {}), create_builtin_output("tui", {})
         case _:

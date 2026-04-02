@@ -8,7 +8,6 @@ Contains:
 
 from typing import Any
 
-from kohakuterrarium.builtins.outputs.inline import InlineOutput
 from kohakuterrarium.builtins.outputs.stdout import PrefixedStdoutOutput, StdoutOutput
 from kohakuterrarium.builtins.outputs.tts import (
     ConsoleTTS,
@@ -21,7 +20,6 @@ from kohakuterrarium.builtins.outputs.tts import (
 _BUILTIN_OUTPUTS: dict[str, type] = {
     "stdout": StdoutOutput,
     "stdout_prefixed": PrefixedStdoutOutput,
-    "inline": InlineOutput,
     "console_tts": ConsoleTTS,
     "dummy_tts": DummyTTS,
 }
@@ -107,7 +105,6 @@ __all__ = [
     # Implementations
     "StdoutOutput",
     "PrefixedStdoutOutput",
-    "InlineOutput",
     "TTSModule",
     "TTSConfig",
     "ConsoleTTS",

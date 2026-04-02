@@ -115,4 +115,19 @@ export const agentAPI = {
   },
 };
 
+/** Saved sessions */
+export const sessionAPI = {
+  /** @returns {Promise<object[]>} */
+  async list() {
+    const { data } = await api.get("/sessions");
+    return data;
+  },
+
+  /** @returns {Promise<{instance_id: string, type: string, session_name: string}>} */
+  async resume(sessionName) {
+    const { data } = await api.post(`/sessions/${sessionName}/resume`);
+    return data;
+  },
+};
+
 export default api;
