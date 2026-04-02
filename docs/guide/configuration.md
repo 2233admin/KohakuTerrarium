@@ -12,8 +12,8 @@ Use `${VAR:default}` syntax for environment variables:
 
 ```yaml
 controller:
-  model: "${OPENROUTER_MODEL:gpt-4o-mini}"  # Uses env var or default
-  api_key_env: OPENROUTER_API_KEY           # Reads from this env var
+  model: "${OPENROUTER_MODEL:google/gemini-3-flash-preview}"  # Uses env var or default
+  api_key_env: OPENROUTER_API_KEY                             # Reads from this env var
 ```
 
 ### Top-Level Fields
@@ -36,6 +36,13 @@ controller:
 ### Controller Configuration
 
 ```yaml
+# Codex OAuth (uses ChatGPT subscription)
+controller:
+  model: gpt-5.4
+  auth_mode: codex-oauth
+  tool_format: native
+
+# OpenRouter / OpenAI-compatible
 controller:
   model: "google/gemini-3-flash-preview"
   temperature: 0.7
@@ -54,9 +61,10 @@ controller:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `model` | string | Required | Model identifier |
+| `auth_mode` | string | None | Authentication mode: `codex-oauth` for ChatGPT subscription |
 | `temperature` | float | 0.7 | Sampling temperature |
 | `max_tokens` | int | 4096 | Max tokens to generate |
-| `api_key_env` | string | Required | Env var containing API key |
+| `api_key_env` | string | Required* | Env var containing API key (*not needed with codex-oauth) |
 | `base_url` | string | OpenAI URL | API endpoint |
 | `max_messages` | int | 0 (unlimited) | Max conversation messages |
 | `max_context_chars` | int | 0 (unlimited) | Max context characters |
@@ -148,9 +156,9 @@ tools:
     timeout: 30
 ```
 
-**Available built-in tools (23 total):**
+**Available built-in tools (26 total):**
 
-**General tools (16):**
+**General tools (18):**
 
 | Name | Description | Name | Description |
 |------|-------------|------|-------------|
@@ -162,8 +170,9 @@ tools:
 | `glob` | Find files by pattern | `ask_user` | Prompt user for input |
 | `grep` | Regex search in files | `json_read` | Query JSON files |
 | `tree` | Directory structure | `json_write` | Modify JSON files |
+| `info` | Load tool/sub-agent docs | `list_triggers` | Show active triggers |
 
-**Terrarium management tools (7):** Used by the `root` creature for managing terrariums.
+**Terrarium management tools (8):** Used by the `root` creature for managing terrariums.
 
 | Name | Description |
 |------|-------------|
@@ -172,6 +181,7 @@ tools:
 | `terrarium_stop` | Stop a running terrarium |
 | `terrarium_send` | Send a message to a terrarium channel |
 | `terrarium_observe` | Observe terrarium channel traffic |
+| `terrarium_history` | Get channel message history |
 | `creature_start` | Start a creature in a terrarium |
 | `creature_stop` | Stop a creature in a terrarium |
 

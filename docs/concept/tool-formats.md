@@ -61,7 +61,7 @@ Set the format in your agent's `config.yaml`:
 
 ```yaml
 controller:
-  model: "gpt-4o-mini"
+  model: gpt-5.4
   tool_format: bracket    # "bracket", "xml", or "native"
 ```
 

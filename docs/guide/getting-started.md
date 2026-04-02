@@ -7,28 +7,33 @@ This guide walks you through setting up KohakuTerrarium and creating your first 
 ### Prerequisites
 
 - Python 3.10 or higher
-- An LLM API key (OpenAI, OpenRouter, or compatible service)
+- An LLM provider: ChatGPT subscription (via Codex OAuth), OpenRouter, OpenAI, or any OpenAI-compatible API
 
 ### Install from Source
 
 ```bash
-# Clone the repository
-git clone https://github.com/KohakuBlueLeaf/KohakuTerrarium.git
+git clone https://github.com/Kohaku-Lab/KohakuTerrarium.git
 cd KohakuTerrarium
-
-# Install in editable mode (recommended for development)
 uv pip install -e .
-# or
-pip install -e .
 ```
 
-### Set Environment Variables
+### Authentication
+
+**Option A: Codex OAuth (recommended, uses ChatGPT Plus/Pro subscription)**
 
 ```bash
-# For OpenRouter (recommended for model variety)
+kt login codex
+```
+
+This opens a browser for ChatGPT OAuth. No API key needed after login.
+
+**Option B: API key**
+
+```bash
+# For OpenRouter (model variety)
 export OPENROUTER_API_KEY="sk-or-..."
 
-# For OpenAI
+# For OpenAI direct
 export OPENAI_API_KEY="sk-..."
 ```
 
@@ -37,11 +42,20 @@ export OPENAI_API_KEY="sk-..."
 The fastest way to get started is running one of the included example agents:
 
 ```bash
+# Authenticate (if using ChatGPT subscription)
+kt login codex
+
 # Run the SWE agent (coding assistant, CLI input)
 kt run examples/agent-apps/swe_agent
 
-# Or with TUI input/output for a richer terminal experience
+# Run with TUI for a richer terminal experience
 kt run examples/agent-apps/swe_agent_tui
+
+# Run with session recording (saves to .kt file)
+kt run examples/agent-apps/swe_agent --session
+
+# Resume a previous session
+kt resume .kohaku/sessions/swe_agent_*.kt
 ```
 
 You'll see output like:
@@ -75,13 +89,11 @@ Create `examples/agent-apps/my_agent/config.yaml`:
 name: my_agent
 version: "1.0"
 
-# LLM Configuration
+# LLM Configuration (Codex OAuth - uses ChatGPT subscription)
 controller:
-  model: "gpt-4o-mini"           # or "anthropic/claude-3-haiku" for OpenRouter
-  temperature: 0.7
-  max_tokens: 4096
-  api_key_env: OPENROUTER_API_KEY
-  base_url: https://openrouter.ai/api/v1
+  model: gpt-5.4
+  auth_mode: codex-oauth
+  tool_format: native
 
 # System prompt file
 system_prompt_file: prompts/system.md
@@ -333,14 +345,49 @@ asyncio.run(main())
 To run a multi-agent terrarium:
 
 ```bash
-# Run the novel writer terrarium
-kt terrarium run examples/terrariums/novel_terrarium/
+# Run with a root agent (user talks to root, root orchestrates the team)
+kt terrarium run terrariums/swe_team/
 
-# With channel observation
+# Run with session recording
+kt terrarium run terrariums/swe_team/ --session
+
+# Run with channel observation (specific channels)
 kt terrarium run examples/terrariums/novel_terrarium/ --observe ideas outline
 ```
 
 See [Terrarium](../concept/terrarium.md) for the concepts and [Configuration Reference](configuration.md) for the terrarium YAML format.
+
+## Session Persistence and Resume
+
+Every session can be saved to a `.kt` file (SQLite via KohakuVault) and resumed later.
+
+```bash
+# Start with session recording
+kt run examples/agent-apps/swe_agent --session
+
+# Resume right where you left off
+kt resume .kohaku/sessions/swe_agent_*.kt
+
+# Inspect a session
+python scripts/inspect_session.py session.kt --all
+python scripts/inspect_session.py session.kt --search "auth bug"
+```
+
+What gets saved: conversation history (with full tool_calls metadata), event log, scratchpad state, token usage, sub-agent conversations, channel messages.
+
+## Web Dashboard
+
+A Vue 3 web frontend for managing agents and terrariums in real-time.
+
+```bash
+# Start API server
+cd KohakuTerrarium && python -m apps.api.main
+
+# Start frontend dev server
+cd apps/web && npm install && npm run dev
+```
+
+Features: terrarium topology graph, multi-tab chat (root + creatures + channels), real-time streaming, sub-agent tool activity, channel message feed, token usage tracking, dark/light mode with gemstone color theme.
 
 ## Next Steps
 

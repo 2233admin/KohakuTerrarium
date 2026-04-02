@@ -1,4 +1,4 @@
-# modules/ -- Plugin Protocols
+# modules/ (Plugin Protocols)
 
 The modules directory defines the plugin protocols that all framework components
 implement. Each subdirectory provides a base protocol (interface), an abstract
@@ -48,15 +48,15 @@ Sub-agent lifecycle management.
 
 Input modules receive external input and produce `TriggerEvent`s.
 
-- `InputModule` -- Protocol with `start()`, `stop()`, `get_input()`
-- `BaseInputModule` -- ABC with running-state management
+- `InputModule`: Protocol with `start()`, `stop()`, `get_input()`
+- `BaseInputModule`: ABC with running-state management
 
 ### output/ (`base.py`, `router.py`)
 
 Output modules deliver agent output to destinations.
 
-- `OutputModule` -- Protocol with `write()`, `write_stream()`, `flush()`
-- `BaseOutputModule` -- ABC with common lifecycle hooks
-- `OutputRouter` (`router.py`) -- State machine that routes parse events to the
+- `OutputModule`: Protocol with `write()`, `write_stream()`, `flush()`
+- `BaseOutputModule`: ABC with common lifecycle hooks
+- `OutputRouter` (`router.py`): State machine that routes parse events to the
   correct output module. Handles normal text, tool blocks (suppressed), and
   named output targets (`[/output_name]...[output_name/]`).

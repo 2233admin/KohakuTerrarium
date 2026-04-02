@@ -165,6 +165,26 @@ When a tool like `send_message` resolves a channel name:
 
 This means sub-agent channels stay private automatically, terrarium channels are accessible to all creatures, and there is no accidental shadowing.
 
+## Session Persistence
+
+Sessions can be persisted to `.kt` files (SQLite via KohakuVault) for later resume. The `SessionStore` records conversation history, scratchpad state, event log, token usage, and channel messages. When resuming, the stored state is injected back into agents.
+
+```python
+from kohakuterrarium.session import SessionStore
+
+# Record a session
+store = SessionStore("session.kt")
+store.init_meta(session_id="sess_001", config_type="agent", ...)
+store.save_conversation("my_agent", messages)
+store.save_state("my_agent", scratchpad={"plan": "step 1"})
+
+# Resume later
+messages = store.load_conversation("my_agent")
+scratchpad = store.load_scratchpad("my_agent")
+```
+
+For full API, see [Python API Reference](../api-reference/python.md).
+
 ## Shared State Registration
 
 Modules can register their own state at the environment level without coupling to specific data structures:

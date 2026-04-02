@@ -96,6 +96,6 @@ Returns a confirmation message indicating the file and path that were updated.
 
 - Use `json_read` first to inspect the current state before writing
 - Intermediate objects are created automatically (e.g., `.a.b.c` creates `a` and `b` if missing)
-- Values are parsed as JSON first -- wrap strings in quotes (`"hello"`) to ensure they stay strings
+- Values are parsed as JSON first. Wrap strings in quotes (`"hello"`) to ensure they stay strings
 - If the file does not exist, it is created with an empty object as the base
 - For non-JSON files, use `write` or `edit` instead

@@ -137,6 +137,12 @@ await env.inject("Please help me")
 ### Phase 8 (`test_phase8.py`) - Advanced Coverage
 - SkillDoc/frontmatter, SubAgent with MockLLM, SubAgentJob, Controller, InteractiveSubAgent, Commands, Aggregator
 
+### Session Store (`test_session_store.py`) - SessionStore CRUD
+- Table creation, event append/retrieve, conversation save/load, scratchpad persistence, channel messages, FTS search, counter restoration, lifecycle
+
+### Session Resume (`test_session_resume.py`) - Resume Roundtrips
+- Agent session roundtrip, terrarium multi-agent roundtrip, conversation injection, tool_calls preservation via msgpack, multiple resume cycles, empty conversation/scratchpad edge cases, session type detection
+
 ---
 
 ## Integration Test Coverage
@@ -226,7 +232,7 @@ See [Framework Internals](../architecture/framework.md) for the state machine di
 |------|---------------|----------|
 | **Multi-agent channel flow** | Two agents exchanging messages through channels end-to-end | High |
 | **Background + direct tool parallel** | Background wait_channel running while direct tools complete | High |
-| **FastAPI HTTP API** | `apps/api/` REST endpoints and WebSocket streams | High |
+| **FastAPI HTTP API** | `apps/api/` REST endpoints, unified WebSocket, config discovery | High |
 | **Event ordering under concurrency** | Multiple events arriving simultaneously, batching behavior | Medium |
 | **Agent._process_event_with_controller** | Full 6-phase loop with tool execution and feedback | Medium |
 | **Termination conditions** | max_turns, keywords, idle_timeout, max_duration | Medium |

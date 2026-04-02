@@ -190,7 +190,11 @@ State: OUTPUT_BLOCK
   BlockEndEvent       -> transition to NORMAL
 ```
 
-Activity notifications (`on_activity()`) are separate from text output - they are used for tool_start, tool_done, tool_error, etc.
+Activity notifications (`on_activity()`) are separate from text output - they are used for tool_start, tool_done, tool_error, etc. The router also supports `notify_activity(metadata=)` for structured metadata delivery and `add_secondary()` / `remove_secondary()` for adding output modules that observe without replacing the primary output (used by SessionOutput and WebSocket StreamOutput).
+
+### Token Usage Tracking
+
+The controller tracks per-LLM-call token usage via the `_last_usage` attribute on the LLM provider. Both the OpenAI provider and Codex OAuth provider capture usage from streaming (final SSE chunk) and non-streaming responses. Usage is emitted as a `token_usage` activity event after each LLM call.
 
 ### Sub-Agent System (`modules/subagent/`)
 
@@ -275,7 +279,7 @@ Phase 5: Exit if no feedback; continue if direct results pending
 Phase 6: Push feedback to controller -> loop to Phase 1
 ```
 
-**Key design: background tools do NOT block the loop.** They get a placeholder response ("Running in background") so the API always sees a tool result for every tool call. When the background tool finishes, the executor's `_on_complete` callback fires `_process_event` as a new event -- the agent is back in idle by then, waiting for input or the next trigger.
+**Key design: background tools do NOT block the loop.** They get a placeholder response ("Running in background") so the API always sees a tool result for every tool call. When the background tool finishes, the executor's `_on_complete` callback fires `_process_event` as a new event. The agent is back in idle by then, waiting for input or the next trigger.
 
 ### Tool Execution Modes
 
@@ -285,7 +289,7 @@ Phase 6: Push feedback to controller -> loop to Phase 1
 | **BACKGROUND** | `execution_mode = ExecutionMode.BACKGROUND` | Placeholder response, result delivered later via `_on_complete` |
 | **Opt-in background** | Model passes `run_in_background=True` | Same as BACKGROUND, but decided by the model at call time |
 
-Tools declaring `BACKGROUND` mode are FORCED background -- the model cannot make them direct. This is used for tools like `terrarium_observe` that wait indefinitely for external events.
+Tools declaring `BACKGROUND` mode are forced background. The model cannot make them direct. This is used for tools like `terrarium_observe` that wait indefinitely for external events.
 
 ### Example: Root Agent + Background Observe
 
@@ -312,22 +316,29 @@ Tools declaring `BACKGROUND` mode are FORCED background -- the model cannot make
 src/kohakuterrarium/
 +-- core/                    # Core abstractions and runtime
 |   +-- agent.py             # Agent orchestrator
-|   +-- controller.py        # LLM conversation loop
+|   +-- agent_handlers.py    # Event processing handlers
+|   +-- controller.py        # LLM conversation loop + token usage tracking
 |   +-- conversation.py      # Message history management
 |   +-- executor.py          # Background tool execution
 |   +-- job.py               # Job status tracking
 |   +-- events.py            # TriggerEvent model
 |   +-- session.py           # Session registry (keyed shared state)
+|   +-- trigger_manager.py   # Trigger lifecycle + on_trigger_fired callback
 |   +-- config.py            # Configuration loading
 |   +-- registry.py          # Module registration
 |   +-- loader.py            # Dynamic module loading
 |
 +-- modules/                 # Plugin APIs
 |   +-- input/base.py        # InputModule protocol
-|   +-- output/              # OutputModule + Router
+|   +-- output/              # OutputModule + Router (supports secondary outputs)
 |   +-- tool/base.py         # Tool protocol + BaseTool
 |   +-- trigger/base.py      # TriggerModule protocol
-|   +-- subagent/            # SubAgent system
+|   +-- subagent/            # SubAgent system (session-aware, tool activity tracking)
+|
++-- session/                 # Session persistence
+|   +-- store.py             # SessionStore (9 KohakuVault tables in .kt file)
+|   +-- output.py            # SessionOutput (OutputModule that records to store)
+|   +-- resume.py            # Resume agent/terrarium from .kt file
 |
 +-- parsing/                 # Stream parsing
 |   +-- state_machine.py     # StreamParser
@@ -342,15 +353,16 @@ src/kohakuterrarium/
 |   +-- plugins.py           # Extensible plugins
 |
 +-- builtins/                # Built-in implementations
-|   +-- tools/               # bash, read, write, etc.
+|   +-- tools/               # 18 general + 8 terrarium tools
 |   +-- inputs/              # cli, whisper, none
 |   +-- outputs/             # stdout, tts
 |   +-- tui/                 # TUI session, input, output
-|   +-- subagents/           # explore, plan, memory
+|   +-- subagents/           # 10 sub-agents: explore, plan, worker, critic, etc.
 |
 +-- llm/                     # LLM integration
-|   +-- base.py              # LLMProvider protocol
-|   +-- openai.py            # OpenAI-compatible provider
+|   +-- base.py              # LLMProvider protocol (with last_usage property)
+|   +-- openai.py            # OpenAI-compatible provider (token usage capture)
+|   +-- codex_provider.py    # Codex OAuth provider (ChatGPT subscription)
 |   +-- message.py           # Message formatting
 |
 +-- utils/                   # Utilities

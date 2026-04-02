@@ -86,6 +86,6 @@ Objects and arrays are formatted as indented JSON. Primitive values (strings, nu
 ## TIPS
 
 - Use `glob` to find JSON files first, then `json_read` to inspect them
-- Use a query to avoid reading huge files entirely -- extract just what you need
+- Use a query to avoid reading huge files entirely. Extract just what you need
 - For modifying JSON, use `json_write` instead
 - If you need the full file with line numbers, use `read` instead

@@ -218,6 +218,25 @@ The `ChannelRegistry` manages all channels within a session. In a terrarium, all
 - Broadcast for shared context (style decisions, language preferences)
 - Broadcast listeners should absorb information without necessarily responding
 
+## Channel Callbacks
+
+Both channel types support `on_send` callbacks that fire on every message send. This enables non-destructive observation without consuming messages.
+
+```python
+channel = registry.get("tasks")
+channel.on_send(lambda msg: print(f"[{msg.channel}] {msg.sender}: {msg.content}"))
+```
+
+The callback receives the `ChannelMessage` before it enters the queue or broadcast. This is used by:
+- `SessionOutput` to record channel messages to the session store
+- The unified WebSocket handler to push channel events to the frontend
+- The `ChannelObserver` for terrarium observation
+
+To remove a callback:
+```python
+channel.remove_on_send()
+```
+
 ## Error Handling
 
 **Non-existent broadcast channel:** Returns an error with a listing of all available channels, guiding the LLM to use valid names.

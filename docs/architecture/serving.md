@@ -13,12 +13,12 @@ The serving layer is the single source of truth for all runtime operations. The 
 
 ## KohakuManager
 
-`KohakuManager` is the central service manager. All runtime operations go through it.
+`KohakuManager` is the central service manager. All runtime operations go through it. It optionally creates a `SessionStore` for each terrarium, enabling persistent session recording.
 
 ```python
 from kohakuterrarium.serving import KohakuManager
 
-manager = KohakuManager()
+manager = KohakuManager(session_dir=".kohaku/sessions")
 ```
 
 ### Standalone Agent Operations
@@ -45,8 +45,15 @@ await manager.stop_agent(agent_id)
 ### Terrarium Operations
 
 ```python
-# Create and start a terrarium
+# Create and start a terrarium (with auto session recording)
 tid = await manager.create_terrarium(config_path="examples/terrariums/novel_terrarium")
+
+# Mount an individual creature as an agent on the terrarium
+await manager.terrarium_mount(tid, "swe", "creatures/swe")
+
+# Chat with a specific target (root agent or creature)
+async for chunk in manager.terrarium_chat(tid, "root", "Fix the auth bug"):
+    print(chunk, end="")
 
 # Get status (creatures, channels, running state)
 status = manager.get_terrarium_status(tid)
@@ -140,3 +147,24 @@ Represents an agent output event (text chunk, tool activity).
 | `content` | `str` | Event content |
 | `timestamp` | `datetime` | When created |
 | `metadata` | `dict` | Extra data |
+
+## Session Persistence
+
+When `session_dir` is provided, `KohakuManager` automatically creates a `SessionStore` for each terrarium. The store records:
+
+- All creature events (text, tool calls, tool results, trigger fires)
+- Conversation snapshots (raw `list[dict]` via msgpack, preserving tool_calls metadata)
+- Agent state (scratchpad, token usage)
+- Channel messages (via `on_send` callbacks)
+- Sub-agent conversations and metadata
+
+The recording uses `SessionOutput`, an `OutputModule` added as a secondary output on each creature's output router. This captures events without modifying the processing loop, following the same pattern as the WebSocket `StreamOutput`.
+
+## Unified WebSocket Architecture
+
+Each terrarium instance uses a single WebSocket connection that carries ALL creature output and ALL channel messages. This is implemented in `apps/api/ws/chat.py`:
+
+- `/ws/terrariums/{id}`: single WS carrying all events for a terrarium
+- `/ws/creatures/{id}`: per-creature WS for standalone agents
+
+Events are multiplexed with a `source` field identifying the creature or channel. Channel messages are captured via `on_send` callbacks on `BaseChannel`, which fire on every send (both queue and broadcast channels).

@@ -101,6 +101,7 @@ Each creature runs its own event loop, which:
 {
     "name": "novel_writer",
     "running": True,
+    "has_root": True,              # Whether a root agent is configured
     "creatures": {
         "brainstorm": {
             "running": True,
@@ -115,6 +116,16 @@ Each creature runs its own event loop, which:
     ],
 }
 ```
+
+### Session Persistence
+
+The runtime supports attaching a `SessionStore` via `attach_session_store(store, resume_data=None)`. When attached:
+
+1. A `SessionOutput` is added as a secondary output on each creature, recording events to the store
+2. `on_send` callbacks are registered on all channels to capture channel messages
+3. If `resume_data` is provided, conversation and scratchpad state are injected into each creature before event loops start
+
+The `root_agent` property and `get_creature_agent(name)` method provide direct access to agent instances for resume injection.
 
 ## API Layer
 

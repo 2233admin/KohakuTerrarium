@@ -1,4 +1,4 @@
-# builtins/ -- Built-in Components
+# builtins/ (Built-in Components)
 
 Ready-to-use tools, sub-agents, inputs, and outputs that ship with the framework.
 Agents reference these by name in their `config.yaml`.
@@ -52,8 +52,8 @@ Shared terminal UI with coordinated input and output via the session registry.
 | Module | Purpose |
 |--------|---------|
 | `TUISession` | Shared state (input queue, output buffer, stop signal) stored in `Session.tui` |
-| `TUIInput` | Input module reading from `TUISession` -- config: `input: {type: tui}` |
-| `TUIOutput` | Output module writing to `TUISession` -- config: `output: {type: tui}` |
+| `TUIInput` | Input module reading from `TUISession`. Config: `input: {type: tui}` |
+| `TUIOutput` | Output module writing to `TUISession`. Config: `output: {type: tui}` |
 
 Both modules attach to the same `TUISession` instance via `get_session()`, enabling coordinated terminal access.
 

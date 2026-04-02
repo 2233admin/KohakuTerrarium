@@ -6,8 +6,8 @@ Creatures are pre-built agent personalities with tools, sub-agents, and system p
 
 Every creature lives in the `creatures/` directory at the project root. Each creature has:
 
-- `config.yaml` -- tools, sub-agents, controller settings
-- `prompts/system.md` -- system prompt additions
+- `config.yaml`: tools, sub-agents, controller settings
+- `prompts/system.md`: system prompt additions
 
 Agents in `examples/agent-apps/` point to a creature via `base_config` and inherit everything. The agent only needs to specify what differs (model, API key, input/output).
 
@@ -15,14 +15,14 @@ Agents in `examples/agent-apps/` point to a creature via `base_config` and inher
 
 ```
 creatures/
-  general/          <-- Base: 23 tools (16 general + 7 terrarium management), 10 sub-agents (6 core + 4 additional), core personality
+  general/          <-- Base: 18 general tools, 10 sub-agents (6 core + 4 additional), core personality
     |
     +-- swe/        <-- Software engineering workflow, git safety
     +-- reviewer/   <-- Code review, severity levels, structured feedback
     +-- ops/        <-- Infrastructure, CI/CD, deployment, monitoring
     +-- researcher/ <-- Research methodology, source evaluation
     +-- creative/   <-- Creative writing, craft principles, two-mode operation
-    +-- root/       <-- Terrarium management, task delegation
+    +-- root/       <-- Terrarium management (8 extra tools), task delegation
 ```
 
 All specialized creatures inherit from `general`. They add domain-specific prompt sections and optionally extend the tool set.
@@ -37,7 +37,7 @@ When a config has `base_config`, the loader:
 | Type | Merge Strategy |
 |------|---------------|
 | Scalars (model, temperature) | Child overrides base |
-| Dicts (controller, input, output) | Shallow merge -- child keys override |
+| Dicts (controller, input, output) | Shallow merge (child keys override) |
 | tools, subagents | Child entries EXTEND base list (deduplicated by name) |
 | system_prompt_file | Base prompt loaded first, child prompt APPENDED |
 
@@ -60,8 +60,8 @@ The prompts are joined with double newlines. The result is a single coherent sys
 
 The foundation creature. Handles 80% of tasks without specialization.
 
-- **Tools (16 general)**: bash, read, write, edit, glob, grep, tree, think, scratchpad, ask_user, http, json_read, json_write, send_message, wait_channel, python
-  - Note: The root creature adds 7 terrarium management tools (terrarium_create, terrarium_status, terrarium_stop, terrarium_send, terrarium_observe, creature_start, creature_stop), bringing the total to 23.
+- **Tools (18 general)**: bash, python, read, write, edit, glob, grep, tree, think, scratchpad, send_message, wait_channel, http, ask_user, json_read, json_write, info, list_triggers
+  - Note: The root creature adds 8 terrarium management tools, bringing the total to 26.
 - **Sub-agents (6 core)**: explore, plan, worker, critic, summarize, research
   - Note: 4 additional sub-agents are available (coordinator, memory_read, memory_write, response) for specialized use cases like channel coordination, memory management, and output delegation.
 - **Prompt sections**: Identity, Communication, Approaching Tasks, Progress Updates, Tool Usage, Output, Safety
@@ -108,7 +108,7 @@ Creative writing specialist. Inherits everything from general and adds writing c
 Terrarium manager. Inherits from general and adds multi-agent management tools.
 
 - **Additional prompt sections**: Terrarium Management (workflow, when to delegate, how to manage)
-- **Additional tools (7)**: terrarium_create, terrarium_status, terrarium_stop, terrarium_send, terrarium_observe, creature_start, creature_stop
+- **Additional tools (8)**: terrarium_create, terrarium_status, terrarium_stop, terrarium_send, terrarium_observe, terrarium_history, creature_start, creature_stop
 
 ## Creating Your Own Agent
 
@@ -121,9 +121,8 @@ version: "1.0"
 base_config: creatures/swe
 
 controller:
-  model: "${OPENROUTER_MODEL:google/gemini-3-flash-preview}"
-  api_key_env: OPENROUTER_API_KEY
-  base_url: https://openrouter.ai/api/v1
+  model: gpt-5.4
+  auth_mode: codex-oauth
   tool_format: native
 
 input:
@@ -135,7 +134,7 @@ output:
   controller_direct: true
 ```
 
-This agent inherits all tools, sub-agents, and system prompts from the SWE creature (which itself inherits from general). It only specifies model, input, and output.
+This agent inherits all tools, sub-agents, and system prompts from the SWE creature (which itself inherits from general). It only specifies model, auth, and input/output.
 
 ### Agent with Additional Tools
 
@@ -213,9 +212,15 @@ The system prompt follows these principles from the design research:
 Creature and agent configs support `${VAR:default}` syntax:
 
 ```yaml
+# Codex OAuth
+controller:
+  model: gpt-5.4
+  auth_mode: codex-oauth
+
+# OpenRouter
 controller:
   model: "${OPENROUTER_MODEL:google/gemini-3-flash-preview}"
   api_key_env: OPENROUTER_API_KEY
 ```
 
-Set `OPENROUTER_MODEL` to override the default model.
+Set `OPENROUTER_MODEL` to override the default model when using OpenRouter.

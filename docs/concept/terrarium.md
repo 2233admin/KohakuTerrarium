@@ -147,12 +147,13 @@ terrarium:
 
 The root agent is NOT a creature inside the terrarium. It does not participate in channels and the terrarium does not inject triggers or topology into it. Instead, the root agent uses terrarium management tools to control the terrarium from the outside:
 
-- `terrarium_send` -- inject messages into channels (dispatch tasks)
-- `terrarium_observe` -- watch a channel for results (runs in background)
-- `terrarium_status` -- check terrarium and creature status
-- `creature_start` / `creature_stop` -- hot-plug creatures
+- `terrarium_send`: inject messages into channels (dispatch tasks)
+- `terrarium_observe`: watch a channel for results (runs in background)
+- `terrarium_status`: check terrarium and creature status
+- `terrarium_history`: get channel message history
+- `creature_start` / `creature_stop`: hot-plug creatures
 
-The root agent is force-given all 7 terrarium tools regardless of its creature config. It is typically built on the `root` creature, which inherits general capabilities.
+The root agent is force-given all 8 terrarium tools regardless of its creature config. It is typically built on the `root` creature, which inherits general capabilities.
 
 The root config uses the same inheritance system as any other agent config (`base_config`, controller overrides, I/O overrides). The user talks to the root agent; the root agent orchestrates the team.
 

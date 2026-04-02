@@ -22,9 +22,9 @@ User -> Controller (LLM) -> Tools -> Result back to Controller -> stdout
 name: swe_agent
 
 controller:
-  model: "google/gemini-3-flash-preview"
-  temperature: 0.7
-  max_tokens: 512000
+  model: gpt-5.4
+  auth_mode: codex-oauth
+  tool_format: native
 
 input:
   type: cli
@@ -257,8 +257,9 @@ Best for: Autonomous monitoring, background processing, event-driven agents
 ```yaml
 name: minimal_swe
 controller:
-  model: "gpt-4o-mini"
-  api_key_env: OPENAI_API_KEY
+  model: gpt-5.4
+  auth_mode: codex-oauth
+  tool_format: native
 input:
   type: cli
 output:
@@ -274,8 +275,9 @@ tools:
 ```yaml
 name: minimal_chat
 controller:
-  model: "gpt-4o-mini"
-  api_key_env: OPENAI_API_KEY
+  model: gpt-5.4
+  auth_mode: codex-oauth
+  tool_format: native
   ephemeral: true
 input:
   type: cli

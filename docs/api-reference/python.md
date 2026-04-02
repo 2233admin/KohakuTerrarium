@@ -567,6 +567,11 @@ class ParserConfig:
 class LLMProvider(Protocol):
     async def chat(self, messages: list[dict], stream: bool = True, **kwargs) -> AsyncIterator[str] | ChatResponse
 
+class BaseLLMProvider:
+    @property
+    def last_usage(self) -> dict[str, int]:
+        """Last LLM call's token usage (prompt_tokens, completion_tokens, total_tokens)."""
+
 class OpenAIProvider(BaseLLMProvider):
     def __init__(
         self,
@@ -582,6 +587,68 @@ class OpenAIProvider(BaseLLMProvider):
     ): ...
 
     async def close(self) -> None
+
+class CodexProvider(BaseLLMProvider):
+    """LLM provider using Codex OAuth (ChatGPT subscription)."""
+    def __init__(self, model: str = "gpt-5.4"): ...
+    async def close(self) -> None
+```
+
+---
+
+## Session Persistence (`session/`)
+
+```python
+class SessionStore:
+    """Persistent session storage backed by KohakuVault (.kt files)."""
+    def __init__(self, path: str | Path) -> None: ...
+
+    # Event log
+    def append_event(self, agent: str, event_type: str, data: dict) -> str
+    def get_events(self, agent: str) -> list[dict]
+    def get_all_events(self) -> list[tuple[str, dict]]
+
+    # Conversation snapshots
+    def save_conversation(self, agent: str, messages: list[dict] | str) -> None
+    def load_conversation(self, agent: str) -> list[dict] | None
+
+    # Agent state
+    def save_state(self, agent: str, *, scratchpad: dict | None = None,
+                   turn_count: int | None = None, token_usage: dict | None = None,
+                   triggers: list[dict] | None = None) -> None
+    def load_scratchpad(self, agent: str) -> dict
+    def load_turn_count(self, agent: str) -> int
+    def load_token_usage(self, agent: str) -> dict
+
+    # Channel messages
+    def save_channel_message(self, channel: str, data: dict) -> str
+    def get_channel_messages(self, channel: str) -> list[dict]
+
+    # Sub-agent tracking
+    def next_subagent_run(self, parent: str, name: str) -> int
+    def save_subagent(self, parent: str, name: str, run: int, meta: dict,
+                      conv_json: str | None = None) -> None
+
+    # Session metadata
+    def init_meta(self, session_id: str, config_type: str, config_path: str,
+                  pwd: str, agents: list[str], **kwargs) -> None
+    def load_meta(self) -> dict
+
+    # Full-text search
+    def search(self, query: str, k: int = 10) -> list[dict]
+
+    # Lifecycle
+    def flush(self) -> None
+    def close(self) -> None
+
+class SessionOutput(OutputModule):
+    """Output module that records events to a SessionStore."""
+    def __init__(self, agent_name: str, store: SessionStore, agent: Agent): ...
+
+# Resume functions
+def resume_agent(kt_path: str | Path) -> Agent
+def resume_terrarium(kt_path: str | Path) -> TerrariumRuntime
+def detect_session_type(kt_path: str | Path) -> str  # "agent" or "terrarium"
 ```
 
 ---
@@ -608,6 +675,21 @@ class OpenAIProvider(BaseLLMProvider):
 | `ask_user` | Prompt user for input | DIRECT |
 | `json_read` | Query JSON files | DIRECT |
 | `json_write` | Modify JSON files | DIRECT |
+| `info` | Load tool/sub-agent docs | DIRECT |
+| `list_triggers` | Show active triggers | DIRECT |
+
+**Terrarium management tools (8):** Used by the `root` creature.
+
+| Name | Description | Execution Mode |
+|------|-------------|---------------|
+| `terrarium_create` | Create and start a terrarium | DIRECT |
+| `terrarium_status` | Get terrarium status | DIRECT |
+| `terrarium_stop` | Stop a running terrarium | DIRECT |
+| `terrarium_send` | Send to a terrarium channel | DIRECT |
+| `terrarium_observe` | Observe channel traffic | BACKGROUND |
+| `terrarium_history` | Get channel message history | DIRECT |
+| `creature_start` | Start a creature | DIRECT |
+| `creature_stop` | Stop a creature | DIRECT |
 
 ```python
 from kohakuterrarium.builtins.tools import get_builtin_tool, BUILTIN_TOOLS

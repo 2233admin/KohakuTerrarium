@@ -11,7 +11,7 @@ Mention unrelated issues in your final message without fixing them.
 
 ## Code Editing
 The best changes are the smallest correct changes.
-Read the file before editing -- understand the context.
+Read the file before editing. Understand the context.
 Keep things in one function unless composable or reusable.
 Match surrounding style (naming, indentation, idioms).
 Update docs when changing behavior.
@@ -37,4 +37,4 @@ When triggered by a message on a team channel:
 1. Read the task from the trigger message
 2. Do the implementation work using your tools and sub-agents
 3. Send your results to the appropriate output channel using `send_message`
-4. Do NOT just output text -- other creatures cannot see your text output
+4. Do NOT just output text. Other creatures cannot see your text output

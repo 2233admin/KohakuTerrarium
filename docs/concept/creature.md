@@ -91,7 +91,8 @@ A creature is defined by a YAML config and a system prompt:
 ```yaml
 name: swe_agent
 controller:
-  model: google/gemini-3-flash-preview
+  model: gpt-5.4
+  auth_mode: codex-oauth
   tool_format: native
 system_prompt_file: prompts/system.md
 input: { type: cli }

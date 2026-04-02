@@ -10,6 +10,22 @@ uv pip install -e .
 
 After installation, commands are run via `kt`.
 
+## Authentication
+
+### `login` - Authenticate with a Provider
+
+```bash
+kt login <provider>
+```
+
+Currently supports Codex OAuth, which uses your ChatGPT Plus/Pro subscription for LLM access.
+
+```bash
+kt login codex
+```
+
+Opens a browser for ChatGPT OAuth. After login, agents configured with `auth_mode: codex-oauth` will use your subscription.
+
 ## Agent Commands
 
 ### `run` - Run an Agent
@@ -31,12 +47,16 @@ Start an agent from a config folder and enter the interactive event loop.
 | Flag | Values | Default | Description |
 |------|--------|---------|-------------|
 | `--log-level` | `DEBUG`, `INFO`, `WARNING`, `ERROR` | `INFO` | Logging verbosity |
+| `--session` | flag | off | Enable session recording to `.kt` file |
 
 **Examples:**
 
 ```bash
 # Run the SWE agent
 kt run examples/agent-apps/swe_agent
+
+# Run with session recording
+kt run examples/agent-apps/swe_agent --session
 
 # Run with debug logging
 kt run examples/agent-apps/swe_agent --log-level DEBUG
@@ -46,6 +66,32 @@ kt run examples/agent-apps/swe_agent_tui
 ```
 
 The agent folder must contain a `config.yaml` or `config.yml` file.
+
+### `resume` - Resume a Session
+
+```bash
+kt resume <session_path>
+```
+
+Resume a previously saved session from a `.kt` file. Restores conversation history, scratchpad state, and event log.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `session_path` | Yes | Path to `.kt` session file |
+
+**Examples:**
+
+```bash
+# Resume a specific session
+kt resume .kohaku/sessions/swe_agent_20260401_120000.kt
+
+# Resume with glob (shell expansion)
+kt resume .kohaku/sessions/swe_agent_*.kt
+```
+
+The `.kt` file contains all state needed for resume: conversation (with tool_calls metadata), scratchpad, event log, and session metadata. Both standalone agent sessions and terrarium sessions are supported.
 
 ### `list` - List Available Agents
 
@@ -103,6 +149,7 @@ Start a terrarium from a config folder. All creatures run concurrently.
 | Flag | Values | Default | Description |
 |------|--------|---------|-------------|
 | `--log-level` | `DEBUG`, `INFO`, `WARNING`, `ERROR` | `INFO` | Logging verbosity |
+| `--session` | flag | off | Enable session recording to `.kt` file |
 | `--seed` | string | (prompt) | Seed prompt to inject on startup |
 | `--seed-channel` | string | `seed` | Channel to send the seed prompt to |
 | `--observe` | channel names | all | Channels to observe (space-separated) |

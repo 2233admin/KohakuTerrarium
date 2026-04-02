@@ -75,7 +75,7 @@ User <-> Root Agent (creature with terrarium tools)
          | swe | reviewer | ... |  <-- opaque creatures
 ```
 
-**Two composition levels -- never mix them:**
+**Two composition levels (never mix them):**
 - VERTICAL (inside creature): controller -> sub-agents (private, hierarchical)
 - HORIZONTAL (terrarium): creature <-> creature via channels (peer, opaque)
 
@@ -161,11 +161,29 @@ src/kohakuterrarium/
 │   ├── output/              # State machine router + output modules
 │   └── subagent/            # Sub-agent lifecycle management
 │
+├── session/                 # Session persistence (KohakuVault-backed)
+│   ├── store.py             # SessionStore - 9 tables in one .kt file
+│   ├── output.py            # SessionOutput - captures events via OutputModule
+│   └── resume.py            # Resume agent/terrarium from .kt file
+│
+├── serving/                 # HTTP API serving layer
+│   ├── manager.py           # KohakuManager - agent/terrarium lifecycle
+│   └── agent_session.py     # AgentSession - streaming chat wrapper
+│
+├── terrarium/               # Multi-agent runtime
+│   ├── runtime.py           # TerrariumRuntime - creature lifecycle + channels
+│   ├── config.py            # Terrarium config loading + topology prompt
+│   └── hotplug.py           # Add/remove creatures and channels at runtime
+│
 ├── parsing/                 # Stream parsing (state machine)
 ├── commands/                # Framework commands (##read##, ##info##)
-├── llm/                     # LLM abstraction (OpenAI-oriented)
+├── llm/                     # LLM abstraction (OpenAI, OpenRouter, Codex OAuth)
 ├── prompt/                  # Prompt loading and templating
 └── utils/                   # Shared utilities
+
+apps/
+├── api/                     # FastAPI HTTP API (18 REST + 4 WebSocket)
+└── web/                     # Vue 3 frontend (Vite + Element Plus + Vue Flow)
 ```
 
 ## Prompt System Design (CRITICAL - MUST FOLLOW)
@@ -226,8 +244,21 @@ From specification:
 
 ## Current Focus
 
-Building core framework with example agents:
-1. SWE-agent (like Claude Code / Codex / Gemini CLI) - controller with direct output
-2. Group chat agent - controller as orchestrator with output sub-agent
-3. Conversational agent (Neuro-sama style) - interactive output sub-agent
-4. Monitoring agent (drone controller) - trigger-driven, no user output
+Core framework complete. Current work areas:
+1. **Session persistence** - `.kt` files via KohakuVault, full event recording, resume (`kt resume`)
+2. **Web dashboard** - Vue 3 frontend with real-time terrarium UI, topology graph, multi-agent chat
+3. **Context compaction** - Non-blocking compact with RAG memory (planned, see `plans/compact-design.md`)
+4. **Memory system** - KohakuVault-backed searchable memory with FTS5 + vector search (planned)
+
+## Session System
+
+Sessions store everything in a `.kt` file (SQLite via KohakuVault):
+- Conversation snapshots (raw message dicts via msgpack, preserves tool_calls)
+- Append-only event log (every text chunk, tool call, trigger, token usage)
+- Sub-agent conversation capture (saved before destruction)
+- Channel message history
+- Scratchpad state
+
+Resume rebuilds the agent from config and injects the saved conversation.
+
+Key files: `src/kohakuterrarium/session/store.py`, `session/output.py`, `session/resume.py`

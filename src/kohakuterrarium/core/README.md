@@ -1,4 +1,4 @@
-# core/ -- Runtime and Orchestration
+# core/ (Runtime and Orchestration)
 
 The core module contains the runtime engine that powers every KohakuTerrarium agent.
 All components communicate through a unified `TriggerEvent` model.
@@ -10,9 +10,9 @@ All components communicate through a unified `TriggerEvent` model.
 Top-level orchestrator that wires all subsystems together. Split across three files
 to stay under the line limit:
 
-- **`agent.py`** -- `Agent` class with public API (`from_path()`, `run()`, `inject_input()`)
-- **`agent_init.py`** -- `AgentInitMixin` initializes LLM, registry, executor, input, output, triggers, sub-agents
-- **`agent_handlers.py`** -- `AgentHandlersMixin` processes events, executes tools, manages background jobs
+- **`agent.py`**: `Agent` class with public API (`from_path()`, `run()`, `inject_input()`)
+- **`agent_init.py`**: `AgentInitMixin` initializes LLM, registry, executor, input, output, triggers, sub-agents
+- **`agent_handlers.py`**: `AgentHandlersMixin` processes events, executes tools, manages background jobs
 
 ### Controller (`controller.py`)
 
@@ -30,7 +30,7 @@ streaming so they run in parallel. Tracks jobs and produces completion events.
 ### Events (`events.py`)
 
 Unified event model. `TriggerEvent` is the single event type that flows through
-the entire system -- inputs, triggers, tool completions, and sub-agent outputs
+the entire system. Inputs, triggers, tool completions, and sub-agent outputs
 all produce `TriggerEvent`s. Supports stackable batching and multimodal content.
 
 Common event types: `user_input`, `timer`, `tool_complete`, `subagent_output`,

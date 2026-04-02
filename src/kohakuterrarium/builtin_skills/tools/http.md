@@ -99,7 +99,7 @@ If the response body exceeds 50KB, it is truncated with a notice.
 
 - Response body is capped at 50,000 characters
 - Request timeout is 30 seconds
-- Binary responses (images, files) are not handled well -- use for text/JSON only
+- Binary responses (images, files) are not handled well. Use for text/JSON only
 - No cookie jar persistence between requests
 - Redirects are followed automatically (up to httpx default limit)
 

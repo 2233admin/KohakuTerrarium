@@ -20,7 +20,7 @@ An agent has three concurrent event sources. All converge on `_process_event()`,
 
 **Input loop** (`agent.run()`): The main loop. Blocks on `input.get_input()` waiting for user messages. When a message arrives, calls `_process_event()`.
 
-**Trigger tasks**: Each trigger (channel message, timer, etc.) runs as a separate `asyncio.Task` created during `agent.start()`. When a trigger fires, it calls `_process_event()` directly -- does NOT go through the input loop.
+**Trigger tasks**: Each trigger (channel message, timer, etc.) runs as a separate `asyncio.Task` created during `agent.start()`. When a trigger fires, it calls `_process_event()` directly. It does NOT go through the input loop.
 
 **Background tool callback**: When a background tool or sub-agent finishes, the executor calls `_on_bg_complete()` which creates a new `asyncio.Task` calling `_process_event()`. Same delivery path as triggers.
 
@@ -136,3 +136,25 @@ terrarium_observe receives message -> _on_bg_complete fires:
 - **Within one agent**: Single-threaded async. One `_process_event` at a time (lock). Multiple tools run concurrently via `asyncio.Task`.
 - **Between creatures**: Fully concurrent. Each creature has its own agent, own lock, own LLM calls. Communication is explicit via channels.
 - **Root vs terrarium**: Root agent and creatures run concurrently. Root's background tools (`terrarium_observe`) bridge the two.
+
+## Token Usage Tracking
+
+The controller tracks per-LLM-call token usage. Both the OpenAI provider and Codex OAuth provider capture usage from streaming responses (final SSE chunk) and non-streaming responses. Usage is stored on the provider as `last_usage` and emitted as a `token_usage` activity event after each LLM call, which is then:
+
+- Displayed in the web UI per creature
+- Recorded by `SessionOutput` to the session store
+- Streamed over the unified WebSocket to the frontend
+
+## Session Persistence
+
+When session recording is enabled (via `--session` flag or programmatic `attach_session_store()`), a `SessionOutput` module is added as a secondary output on each agent. This records:
+
+- All text output (accumulated per processing cycle)
+- Tool calls and results (with arguments and output)
+- Sub-agent invocations (with conversation snapshots)
+- Trigger fires (channel, sender, content)
+- Token usage per LLM call
+- Conversation snapshots (raw `list[dict]` via msgpack, preserving tool_calls)
+- Agent state (scratchpad, turn count)
+
+The recording is non-blocking and does not modify the processing loop. It uses the same secondary output pattern as the WebSocket `StreamOutput`.
