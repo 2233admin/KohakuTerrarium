@@ -7,6 +7,7 @@ re-attaches session store for continued recording.
 
 import os
 from pathlib import Path
+from typing import Any
 
 from kohakuterrarium.core.agent import Agent
 from kohakuterrarium.core.conversation import Conversation
@@ -16,6 +17,33 @@ from kohakuterrarium.terrarium.runtime import TerrariumRuntime
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Valid IO modes and their module types
+IO_MODES = ("cli", "inline", "tui")
+
+
+def _create_io_modules(
+    mode: str,
+) -> tuple[Any, Any]:
+    """Create input and output modules for a given IO mode.
+
+    Returns (input_module, output_module).
+    """
+    from kohakuterrarium.builtins.inputs import create_builtin_input
+    from kohakuterrarium.builtins.outputs import create_builtin_output
+
+    match mode:
+        case "cli":
+            return create_builtin_input("cli", {}), create_builtin_output("stdout", {})
+        case "inline":
+            return (
+                create_builtin_input("inline", {}),
+                create_builtin_output("inline", {}),
+            )
+        case "tui":
+            return create_builtin_input("tui", {}), create_builtin_output("tui", {})
+        case _:
+            raise ValueError(f"Unknown IO mode: {mode}. Use one of {IO_MODES}")
 
 
 def _build_conversation(messages: list[dict]) -> Conversation:
@@ -44,12 +72,14 @@ def _build_conversation(messages: list[dict]) -> Conversation:
 def resume_agent(
     session_path: str | Path,
     pwd_override: str | None = None,
+    io_mode: str | None = None,
 ) -> tuple[Agent, SessionStore]:
-    """Resume a standalone agent from a .kt session file.
+    """Resume a standalone agent from a session file.
 
     Args:
-        session_path: Path to the .kt session file.
+        session_path: Path to the session file.
         pwd_override: Override the working directory (uses saved pwd if None).
+        io_mode: Override input/output mode ("cli", "inline", "tui", or None for config default).
 
     Returns:
         (agent, store) tuple. Caller should run agent.run() then store.close().
@@ -71,8 +101,15 @@ def resume_agent(
     if pwd and os.path.isdir(pwd):
         os.chdir(pwd)
 
+    # Create IO module overrides if mode specified
+    io_kwargs: dict[str, Any] = {}
+    if io_mode:
+        inp, out = _create_io_modules(io_mode)
+        io_kwargs["input_module"] = inp
+        io_kwargs["output_module"] = out
+
     # Rebuild agent from config
-    agent = Agent.from_path(config_path)
+    agent = Agent.from_path(config_path, **io_kwargs)
     agent_name = meta.get("agents", [agent.config.name])[0]
 
     # Inject saved conversation
@@ -108,12 +145,14 @@ def resume_agent(
 def resume_terrarium(
     session_path: str | Path,
     pwd_override: str | None = None,
+    io_mode: str | None = None,
 ) -> tuple[TerrariumRuntime, SessionStore]:
-    """Resume a terrarium from a .kt session file.
+    """Resume a terrarium from a session file.
 
     Args:
-        session_path: Path to the .kt session file.
+        session_path: Path to the session file.
         pwd_override: Override the working directory (uses saved pwd if None).
+        io_mode: Override root agent input/output mode ("cli", "inline", "tui", or None for config default).
 
     Returns:
         (runtime, store) tuple. Caller should run runtime.run() then store.close().
@@ -136,8 +175,14 @@ def resume_terrarium(
     if pwd and os.path.isdir(pwd):
         os.chdir(pwd)
 
-    # Rebuild runtime from config
+    # Rebuild runtime from config, with optional IO mode override for root
     config = load_terrarium_config(config_path)
+    if io_mode and config.root:
+        config.root.config_data["input"] = {"type": io_mode if io_mode != "cli" else "cli"}
+        config.root.config_data["output"] = {
+            "type": io_mode if io_mode != "cli" else "stdout",
+            "controller_direct": True,
+        }
     runtime = TerrariumRuntime(config)
 
     # Prepare resume data (injected during attach_session_store in run())

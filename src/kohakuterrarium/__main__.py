@@ -102,6 +102,12 @@ def main() -> int:
         help="Resume the most recent session",
     )
     resume_parser.add_argument(
+        "--mode",
+        choices=["cli", "inline", "tui"],
+        default=None,
+        help="Override input/output mode (cli=stdout, inline=rich+prompt_toolkit, tui=textual)",
+    )
+    resume_parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
@@ -121,7 +127,9 @@ def main() -> int:
         session = None if args.no_session else args.session
         return run_agent_cli(args.agent_path, args.log_level, session=session)
     elif args.command == "resume":
-        return resume_cli(args.session, args.pwd, args.log_level, last=args.last)
+        return resume_cli(
+            args.session, args.pwd, args.log_level, last=args.last, io_mode=args.mode
+        )
     elif args.command == "list":
         return list_agents_cli(args.path)
     elif args.command == "info":
@@ -308,7 +316,11 @@ def _session_preview(path: Path) -> str:
 
 
 def resume_cli(
-    query: str | None, pwd_override: str | None, log_level: str, last: bool = False
+    query: str | None,
+    pwd_override: str | None,
+    log_level: str,
+    last: bool = False,
+    io_mode: str | None = None,
 ) -> int:
     """Resume an agent or terrarium from a session file."""
     set_level(log_level)
@@ -326,10 +338,10 @@ def resume_cli(
 
     try:
         if session_type == "terrarium":
-            runtime, store = resume_terrarium(path, pwd_override)
+            runtime, store = resume_terrarium(path, pwd_override, io_mode=io_mode)
             asyncio.run(runtime.run())
         else:
-            agent, store = resume_agent(path, pwd_override)
+            agent, store = resume_agent(path, pwd_override, io_mode=io_mode)
             asyncio.run(agent.run())
         return 0
     except KeyboardInterrupt:
