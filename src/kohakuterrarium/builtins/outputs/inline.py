@@ -2,23 +2,21 @@
 Inline output module. Claude Code / Codex CLI-style terminal output.
 
 Streams text inline (no alternate screen buffer), shows tool activity
-as collapsed one-liners, works over SSH/tmux/any terminal.
-Uses Rich for styling.
+with args and output previews, renders markdown for completed text.
+Works over SSH/tmux/any terminal. Uses Rich for styling.
 """
 
 import sys
 
 from rich.console import Console
-from rich.markup import escape
+from rich.markdown import Markdown as RichMarkdown
+from rich.panel import Panel
 from rich.text import Text
 
 from kohakuterrarium.modules.output.base import BaseOutputModule
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-# Dim separator between turns
-_SEPARATOR = Text("─" * 60, style="dim")
 
 
 class InlineOutput(BaseOutputModule):
@@ -32,7 +30,7 @@ class InlineOutput(BaseOutputModule):
     def __init__(self, **options):
         super().__init__()
         self._console = Console(highlight=False)
-        self._has_output = False
+        self._text_buffer: list[str] = []
         self._in_turn = False
 
     async def _on_start(self) -> None:
@@ -44,56 +42,71 @@ class InlineOutput(BaseOutputModule):
         logger.debug("Inline output stopped")
 
     async def on_processing_start(self) -> None:
-        pass
+        self._text_buffer.clear()
 
     async def on_processing_end(self) -> None:
+        self._flush_text_as_markdown()
         if self._in_turn:
             self._end_turn()
 
     async def write(self, content: str) -> None:
-        if not content:
-            return
-        self._ensure_turn()
-        sys.stdout.write(content)
-        sys.stdout.flush()
-        self._has_output = True
+        if content:
+            self._ensure_turn()
+            self._text_buffer.append(content)
 
     async def write_stream(self, chunk: str) -> None:
-        if not chunk:
-            return
-        self._ensure_turn()
-        sys.stdout.write(chunk)
-        sys.stdout.flush()
-        self._has_output = True
+        if chunk:
+            self._ensure_turn()
+            self._text_buffer.append(chunk)
 
     async def flush(self) -> None:
-        if self._has_output:
-            sys.stdout.flush()
+        pass
 
     def reset(self) -> None:
-        self._has_output = False
+        pass
 
     def _ensure_turn(self) -> None:
         if not self._in_turn:
             self._in_turn = True
 
     def _end_turn(self) -> None:
-        if self._has_output:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+        self._console.print()
         self._in_turn = False
-        self._has_output = False
+
+    def _flush_text_as_markdown(self) -> None:
+        """Render accumulated text as markdown via Rich."""
+        if not self._text_buffer:
+            return
+        text = "".join(self._text_buffer).strip()
+        self._text_buffer.clear()
+        if not text:
+            return
+        try:
+            self._console.print(RichMarkdown(text))
+        except Exception:
+            self._console.print(text)
+
+    # ── Activity rendering ──────────────────────────────────────
 
     def on_activity(self, activity_type: str, detail: str) -> None:
         name, rest = _parse_detail(detail)
-        line = _format_activity(activity_type, name, rest)
-        if line:
-            # Flush any pending text before activity line
-            sys.stdout.flush()
-            self._console.print(line)
+        # Flush buffered text before showing activity
+        self._flush_text_as_markdown()
+        self._ensure_turn()
+        _render_activity(self._console, activity_type, name, rest)
+
+    def on_activity_with_metadata(
+        self, activity_type: str, detail: str, metadata: dict
+    ) -> None:
+        name, rest = _parse_detail(detail)
+        self._flush_text_as_markdown()
+        self._ensure_turn()
+        _render_activity(self._console, activity_type, name, rest, metadata)
+
+    # ── Resume history rendering ────────────────────────────────
 
     async def on_resume(self, events: list[dict]) -> None:
-        """Show session history inline with Rich styling."""
+        """Render session history with full detail."""
         if not events:
             return
 
@@ -102,41 +115,21 @@ class InlineOutput(BaseOutputModule):
             return
 
         self._console.print()
-        self._console.print(
-            Text(f"  Resumed session ({len(turns)} turns)  ", style="bold dim")
-        )
+        header = Text()
+        header.append(" Resumed session ", style="bold reverse")
+        header.append(f"  {len(turns)} turns", style="dim")
+        self._console.print(header)
         self._console.print()
 
         for turn in turns:
-            # User input
-            if turn["input_type"] == "user_input":
-                self._console.print(
-                    Text("You: ", style="bold cyan") + Text(turn["input"][:200])
-                )
-            else:
-                self._console.print(
-                    Text("Trigger: ", style="bold yellow") + Text(turn["input"][:200])
-                )
+            _render_turn(self._console, turn)
 
-            # Tool activity (collapsed one-liners)
-            for atype, aname in turn["activities"]:
-                line = _format_activity(atype, aname, "")
-                if line:
-                    self._console.print(line)
-
-            # Assistant text
-            text = "".join(turn["text_parts"]).strip()
-            if text:
-                preview = text[:300]
-                if len(text) > 300:
-                    preview += "..."
-                self._console.print(Text(preview, style=""))
-            self._console.print()
-
-        self._console.print(
-            Text("  End of history  ", style="bold dim")
-        )
+        sep = Text("\u2500" * 50, style="dim")
+        self._console.print(sep)
         self._console.print()
+
+
+# ── Helpers ─────────────────────────────────────────────────────
 
 
 def _parse_detail(detail: str) -> tuple[str, str]:
@@ -144,57 +137,285 @@ def _parse_detail(detail: str) -> tuple[str, str]:
     if detail.startswith("["):
         try:
             end = detail.index("]", 1)
-            return detail[1:end], detail[end + 2:]
+            return detail[1:end], detail[end + 2 :]
         except (ValueError, IndexError):
             pass
     return "unknown", detail
 
 
-def _format_activity(activity_type: str, name: str, rest: str) -> Text | None:
-    """Format a tool/subagent activity as a one-line Rich Text."""
+def _render_activity(
+    console: Console,
+    activity_type: str,
+    name: str,
+    rest: str,
+    metadata: dict | None = None,
+) -> None:
+    """Render a single activity event to console."""
+    metadata = metadata or {}
+
     match activity_type:
         case "tool_start":
-            t = Text("  \u25cb ", style="dim")
+            t = Text("  \u25cb ", style="dim cyan")
             t.append(name, style="bold cyan")
-            if rest:
+            # Show key args
+            args_preview = _format_args_preview(name, metadata.get("args", {}))
+            if args_preview:
+                t.append(f"  {args_preview}", style="dim")
+            elif rest:
                 t.append(f"  {rest[:80]}", style="dim")
-            return t
+            console.print(t)
+
         case "tool_done":
             t = Text("  \u25cf ", style="green")
             t.append(name, style="bold cyan")
             if rest:
-                t.append(f"  {rest[:80]}", style="dim green")
-            return t
+                preview = rest[:100].replace("\n", " ")
+                t.append(f"  {preview}", style="dim")
+            console.print(t)
+
         case "tool_error":
-            t = Text("  \u25cf ", style="red")
+            t = Text("  \u2717 ", style="red")
             t.append(name, style="bold red")
             if rest:
-                t.append(f"  {rest[:80]}", style="red")
-            return t
+                t.append(f"  {rest[:100]}", style="red")
+            console.print(t)
+
         case "subagent_start":
-            t = Text("  \u25cb ", style="dim")
-            t.append(f"[sub] {name}", style="bold magenta")
-            if rest:
-                t.append(f"  {rest[:80]}", style="dim")
-            return t
+            console.print()
+            t = Text("  \u25b7 ", style="dim magenta")
+            t.append(name, style="bold magenta")
+            task = metadata.get("task", rest)
+            if task:
+                t.append(f"  {task[:80]}", style="dim")
+            console.print(t)
+
         case "subagent_done":
-            t = Text("  \u25cf ", style="green")
-            t.append(f"[sub] {name}", style="bold magenta")
-            if rest:
-                t.append(f"  {rest[:60]}", style="dim green")
-            return t
+            result = metadata.get("result", rest)
+            tools_used = metadata.get("tools_used", [])
+            t = Text("  \u25b6 ", style="green")
+            t.append(name, style="bold magenta")
+            if tools_used:
+                t.append(f"  [{', '.join(tools_used)}]", style="dim")
+            console.print(t)
+            # Show result preview indented
+            if result:
+                preview = str(result)[:200].strip()
+                if preview:
+                    for line in preview.split("\n")[:3]:
+                        console.print(Text(f"    {line}", style="dim"))
+            console.print()
+
         case "subagent_error":
-            t = Text("  \u25cf ", style="red")
-            t.append(f"[sub] {name}", style="bold red")
+            t = Text("  \u2717 ", style="red")
+            t.append(name, style="bold red")
             if rest:
-                t.append(f"  {rest[:80]}", style="red")
-            return t
+                t.append(f"  {rest[:100]}", style="red")
+            console.print(t)
+            console.print()
+
+        # Sub-agent's internal tool activity (nested)
+        case s if s.startswith("subagent_tool_"):
+            sub_name = metadata.get("subagent", "")
+            tool_name = metadata.get("tool", "")
+            sub_detail = metadata.get("detail", rest)
+            sub_activity = s.replace("subagent_", "")
+
+            if sub_activity == "tool_start":
+                t = Text("    \u251c\u2500 \u25cb ", style="dim")
+                t.append(tool_name, style="cyan")
+                if sub_detail:
+                    t.append(f"  {sub_detail[:60]}", style="dim")
+                console.print(t)
+            elif sub_activity == "tool_done":
+                t = Text("    \u251c\u2500 \u25cf ", style="dim green")
+                t.append(tool_name, style="cyan")
+                if sub_detail:
+                    preview = sub_detail[:60].replace("\n", " ")
+                    t.append(f"  {preview}", style="dim")
+                console.print(t)
+            elif sub_activity == "tool_error":
+                t = Text("    \u251c\u2500 \u2717 ", style="red")
+                t.append(tool_name, style="bold red")
+                console.print(t)
+
         case _:
-            return None
+            pass
+
+
+def _format_args_preview(tool_name: str, args: dict) -> str:
+    """Format tool args as a concise preview string."""
+    if not args:
+        return ""
+    match tool_name:
+        case "bash":
+            return args.get("command", "")[:80]
+        case "read":
+            path = args.get("path", "")
+            offset = args.get("offset")
+            limit = args.get("limit")
+            suffix = ""
+            if offset or limit:
+                suffix = f" ({offset or 0}:{(offset or 0) + (limit or 0)})"
+            return f"{path}{suffix}"
+        case "write":
+            return args.get("path", "")[:80]
+        case "edit":
+            return args.get("file_path", args.get("path", ""))[:80]
+        case "glob":
+            return args.get("pattern", "")[:80]
+        case "grep":
+            pattern = args.get("pattern", "")
+            path = args.get("path", "")
+            return f'"{pattern}" {path}'.strip()[:80]
+        case "send_message":
+            ch = args.get("channel", "")
+            return f"-> {ch}"
+        case "think":
+            thought = str(args.get("thought", args.get("content", "")))
+            return thought[:60]
+        case _:
+            # Generic: show first key=value pair
+            for k, v in args.items():
+                if k == "content":
+                    continue
+                return f"{k}={str(v)[:50]}"
+            return ""
+
+
+# ── Resume rendering ────────────────────────────────────────────
+
+
+def _render_turn(console: Console, turn: dict) -> None:
+    """Render one conversation turn with full detail."""
+    # User input / trigger
+    if turn["input_type"] == "user_input":
+        console.print(
+            Panel(
+                turn["input"],
+                title="[bold cyan]You[/]",
+                title_align="left",
+                border_style="cyan",
+                padding=(0, 1),
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                turn["input"][:300],
+                title="[bold yellow]Trigger[/]",
+                title_align="left",
+                border_style="yellow",
+                padding=(0, 1),
+            )
+        )
+
+    # Tool calls with args and output
+    in_subagent = False
+    for evt in turn["events"]:
+        etype = evt.get("type", "")
+
+        if etype == "tool_call":
+            name = evt.get("name", "tool")
+            args = evt.get("args", {})
+            t = Text("  \u25cb ", style="dim cyan")
+            t.append(name, style="bold cyan")
+            args_preview = _format_args_preview(name, args)
+            if args_preview:
+                t.append(f"  {args_preview}", style="dim")
+            console.print(t)
+
+        elif etype == "tool_result":
+            name = evt.get("name", "tool")
+            output = evt.get("output", "")
+            error = evt.get("error")
+            if error:
+                t = Text("  \u2717 ", style="red")
+                t.append(name, style="bold red")
+                t.append(f"  {str(error)[:100]}", style="red")
+                console.print(t)
+            else:
+                t = Text("  \u25cf ", style="green")
+                t.append(name, style="bold cyan")
+                # Show output preview
+                if output:
+                    lines = str(output).strip().split("\n")
+                    line_count = len(lines)
+                    if line_count <= 1:
+                        preview = lines[0][:100]
+                        t.append(f"  {preview}", style="dim")
+                    else:
+                        t.append(f"  ({line_count} lines)", style="dim")
+                console.print(t)
+
+        elif etype == "subagent_call":
+            in_subagent = True
+            name = evt.get("name", "subagent")
+            task = evt.get("task", "")
+            console.print()
+            t = Text("  \u25b7 ", style="dim magenta")
+            t.append(name, style="bold magenta")
+            if task:
+                t.append(f"  {task[:80]}", style="dim")
+            console.print(t)
+
+        elif etype == "subagent_result":
+            name = evt.get("name", "subagent")
+            tools = evt.get("tools_used", [])
+            output = evt.get("output", "")
+            turns_count = evt.get("turns", 0)
+            t = Text("  \u25b6 ", style="green")
+            t.append(name, style="bold magenta")
+            parts = []
+            if tools:
+                parts.append(", ".join(tools))
+            if turns_count:
+                parts.append(f"{turns_count} turns")
+            if parts:
+                t.append(f"  [{'; '.join(parts)}]", style="dim")
+            console.print(t)
+            # Show result preview
+            if output:
+                preview = str(output).strip()[:200]
+                if preview:
+                    for line in preview.split("\n")[:3]:
+                        console.print(Text(f"    {line}", style="dim"))
+            console.print()
+            in_subagent = False
+
+        elif etype == "subagent_tool":
+            tool_name = evt.get("tool_name", "")
+            activity = evt.get("activity", "")
+            if activity == "tool_start":
+                t = Text("    \u251c\u2500 \u25cb ", style="dim")
+                t.append(tool_name, style="cyan")
+                console.print(t)
+            elif activity == "tool_done":
+                t = Text("    \u251c\u2500 \u25cf ", style="dim green")
+                t.append(tool_name, style="cyan")
+                console.print(t)
+            elif activity == "tool_error":
+                t = Text("    \u251c\u2500 \u2717 ", style="red")
+                t.append(tool_name, style="bold red")
+                console.print(t)
+
+    # Assistant text (rendered as markdown)
+    text = "".join(turn["text_parts"]).strip()
+    if text:
+        console.print()
+        try:
+            console.print(RichMarkdown(text))
+        except Exception:
+            console.print(text)
+
+    console.print()
 
 
 def _group_into_turns(events: list[dict]) -> list[dict]:
-    """Group session events into turns for resume display."""
+    """Group session events into turns for resume display.
+
+    Each turn has input, text_parts, and a full events list
+    preserving all tool/subagent events with their data.
+    """
     turns: list[dict] = []
     current: dict | None = None
 
@@ -207,35 +428,31 @@ def _group_into_turns(events: list[dict]) -> list[dict]:
                 "input_type": "user_input",
                 "input": evt.get("content", ""),
                 "text_parts": [],
-                "activities": [],
+                "events": [],
             }
         elif etype == "trigger_fired":
             if current:
                 turns.append(current)
             ch = evt.get("channel", "")
             sender = evt.get("sender", "")
+            content = evt.get("content", "")
             current = {
                 "input_type": "trigger",
-                "input": f"[{ch}] from {sender}: {evt.get('content', '')}",
+                "input": f"[{ch}] {sender}: {content}",
                 "text_parts": [],
-                "activities": [],
+                "events": [],
             }
         elif current is not None:
             if etype == "text":
                 current["text_parts"].append(evt.get("content", ""))
-            elif etype == "tool_call":
-                current["activities"].append(("tool_start", evt.get("name", "tool")))
-            elif etype == "tool_result":
-                atype = "tool_error" if evt.get("error") else "tool_done"
-                current["activities"].append((atype, evt.get("name", "tool")))
-            elif etype == "subagent_call":
-                current["activities"].append(
-                    ("subagent_start", evt.get("name", "subagent"))
-                )
-            elif etype == "subagent_result":
-                current["activities"].append(
-                    ("subagent_done", evt.get("name", "subagent"))
-                )
+            elif etype in (
+                "tool_call",
+                "tool_result",
+                "subagent_call",
+                "subagent_result",
+                "subagent_tool",
+            ):
+                current["events"].append(evt)
 
     if current:
         turns.append(current)
