@@ -166,7 +166,7 @@ def _run_terrarium_cli(args: argparse.Namespace) -> int:
                 store.close()
             if session_file and session_file.exists():
                 print(f"\nSession saved. To resume:")
-                print(f"  kt resume {session_file}")
+                print(f"  kt resume {session_file.stem}")
 
     # No root agent: basic seed/observe CLI
     seed_prompt = args.seed

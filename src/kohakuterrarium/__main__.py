@@ -197,7 +197,7 @@ def run_agent_cli(agent_path: str, log_level: str, session: str | None = None) -
             store.close()
         if session_file and session_file.exists():
             print(f"\nSession saved. To resume:")
-            print(f"  kt resume {session_file}")
+            print(f"  kt resume {session_file.stem}")
 
 
 def _resolve_session(query: str | None, last: bool = False) -> Path | None:
@@ -209,6 +209,13 @@ def _resolve_session(query: str | None, last: bool = False) -> Path | None:
     # Full path provided
     if query and Path(query).exists():
         return Path(query)
+
+    # Strip extension from query if present (user may paste from hint)
+    if query:
+        for ext in (".kohakutr", ".kt"):
+            if query.endswith(ext):
+                query = query[: -len(ext)]
+                break
 
     # Search in default session directory
     if not _SESSION_DIR.exists():
@@ -336,7 +343,7 @@ def resume_cli(
             store.close()
         if path.exists():
             print(f"\nSession saved. To resume:")
-            print(f"  kt resume {path}")
+            print(f"  kt resume {path.stem}")
 
 
 def list_agents_cli(agents_path: str) -> int:
