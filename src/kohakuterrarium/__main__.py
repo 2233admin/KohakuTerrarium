@@ -22,6 +22,7 @@ import yaml
 
 from kohakuterrarium.core.agent import Agent
 from kohakuterrarium.llm.codex_auth import CodexTokens, oauth_login
+from kohakuterrarium.packages import resolve_package_path
 from kohakuterrarium.session.resume import (
     detect_session_type,
     resume_agent,
@@ -195,8 +196,6 @@ def main() -> int:
         # Resolve @package references in agent_path
         agent_path = args.agent_path
         if agent_path.startswith("@"):
-            from kohakuterrarium.packages import resolve_package_path
-
             agent_path = str(resolve_package_path(agent_path))
         session = None if args.no_session else args.session
         return run_agent_cli(
@@ -214,8 +213,6 @@ def main() -> int:
         # Resolve @package references in terrarium path
         if hasattr(args, "terrarium_path") and args.terrarium_path:
             if args.terrarium_path.startswith("@"):
-                from kohakuterrarium.packages import resolve_package_path
-
                 args.terrarium_path = str(resolve_package_path(args.terrarium_path))
         return handle_terrarium_command(args)
     elif args.command == "login":
