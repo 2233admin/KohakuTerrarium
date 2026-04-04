@@ -170,31 +170,61 @@ class NullEmbedder(BaseEmbedder):
         )
 
 
+DEFAULT_ST_MODEL = "jinaai/jina-embeddings-v5-text-nano"
+DEFAULT_M2V_MODEL = "minishlab/potion-base-8M"
+
+
+def _detect_best_provider() -> str:
+    """Detect the best available embedding provider.
+
+    Preference: sentence-transformers (jina v5) > model2vec > none.
+    """
+    try:
+        import sentence_transformers  # noqa: F401
+
+        return "sentence-transformer"
+    except ImportError:
+        pass
+    try:
+        import model2vec  # noqa: F401
+
+        return "model2vec"
+    except ImportError:
+        pass
+    return "none"
+
+
 def create_embedder(config: dict[str, Any] | None = None) -> BaseEmbedder:
     """Create an embedder from config dict.
 
     Config format:
-        provider: "model2vec" | "sentence-transformer" | "api" | "none"
+        provider: "auto" | "model2vec" | "sentence-transformer" | "api" | "none"
         model: model name or path
         dimensions: optional dimension override (Matryoshka)
         api_key: for API providers
         base_url: for API providers
         device: "cpu" or "cuda" (for sentence-transformer)
 
+    "auto" (default): tries sentence-transformers (jina v5 nano) first,
+    falls back to model2vec, then NullEmbedder.
+
     Returns NullEmbedder if config is None or provider is "none".
     """
     if not config:
         return NullEmbedder()
 
-    provider = config.get("provider", "none")
+    provider = config.get("provider", "auto")
+
+    if provider == "auto":
+        provider = _detect_best_provider()
 
     match provider:
         case "model2vec":
-            model = config.get("model", "minishlab/potion-base-8M")
+            model = config.get("model", DEFAULT_M2V_MODEL)
             return Model2VecEmbedder(model_name=model)
 
         case "sentence-transformer":
-            model = config.get("model", "google/embeddinggemma-300m")
+            model = config.get("model", DEFAULT_ST_MODEL)
             dims = config.get("dimensions")
             device = config.get("device", "cpu")
             return SentenceTransformerEmbedder(
