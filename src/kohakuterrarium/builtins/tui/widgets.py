@@ -749,6 +749,39 @@ class TerrariumPanel(Static):
         self.update("\n".join(lines) if lines else "(no topology)")
 
 
+# ── Load Older Button ──────────────────────────────────────────
+
+
+class LoadOlderButton(Static):
+    """Clickable button to load earlier messages that were culled."""
+
+    DEFAULT_CSS = """
+    LoadOlderButton {
+        height: 1;
+        text-align: center;
+        color: #0F52BA;
+        padding: 0 1;
+    }
+    LoadOlderButton:hover {
+        background: #0F52BA 15%;
+        text-style: underline;
+    }
+    """
+
+    def __init__(self, hidden_count: int, **kwargs):
+        super().__init__(
+            f"\u25b2 Load {min(hidden_count, 30)} older messages ({hidden_count} hidden)",
+            **kwargs,
+        )
+        self.hidden_count = hidden_count
+
+    class Clicked(Message):
+        pass
+
+    def on_click(self) -> None:
+        self.post_message(self.Clicked())
+
+
 # ── Chat Input ─────────────────────────────────────────────────
 
 

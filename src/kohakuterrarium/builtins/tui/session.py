@@ -18,6 +18,7 @@ from textual.widgets import Footer, Header, Markdown, Static, TabbedContent, Tab
 from kohakuterrarium.builtins.tui.widgets import (
     ChatInput,
     CompactSummaryBlock,
+    LoadOlderButton,
     QueuedMessage,
     RunningPanel,
     ScratchpadPanel,
@@ -33,9 +34,11 @@ from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Max widgets in chat scroll before culling old ones
-MAX_CHAT_WIDGETS = 80
-CULL_KEEP = 50  # After culling, keep this many
+# Default widget limits (configurable via TUISession)
+DEFAULT_MAX_CHAT_WIDGETS = 80  # Cull when exceeding this
+DEFAULT_CULL_KEEP = 50  # Keep this many after cull
+DEFAULT_LOAD_BATCH = 30  # Load this many when "Load older" clicked
+CULL_KEEP = DEFAULT_CULL_KEEP  # Module-level for import by output.py
 
 IDLE_STATUS = "\u25cf KohakUwU"
 
@@ -86,6 +89,7 @@ class AgentTUI(App):
     ):
         super().__init__(**kwargs)
         self.agent_name = agent_name
+        self.tui_session: Any = None  # Set by TUISession.start()
         # Terrarium tabs: ["root", "swe", "reviewer", "#tasks", "#review"]
         self._terrarium_tabs = terrarium_tabs
         self._input_queue: asyncio.Queue[str] = asyncio.Queue()
@@ -179,6 +183,12 @@ class AgentTUI(App):
             inp.focus()
         except Exception:
             pass
+
+    def on_load_older_button_clicked(self, event: LoadOlderButton.Clicked) -> None:
+        """Handle 'Load older' button click."""
+        if self.tui_session:
+            target = self.get_active_tab_name() if self._terrarium_tabs else ""
+            self.tui_session.load_older_batch(target)
 
     def _get_active_chat(self) -> VerticalScroll | None:
         """Get the currently visible chat scroll widget."""
@@ -290,7 +300,13 @@ class TUISession:
     chat scroll. Widgets are routed to the correct tab via `target`.
     """
 
-    def __init__(self, agent_name: str = "agent"):
+    def __init__(
+        self,
+        agent_name: str = "agent",
+        max_chat_widgets: int = DEFAULT_MAX_CHAT_WIDGETS,
+        cull_keep: int = DEFAULT_CULL_KEEP,
+        load_batch: int = DEFAULT_LOAD_BATCH,
+    ):
         self.agent_name = agent_name
         self.running = False
         self._app: AgentTUI | None = None
@@ -300,6 +316,14 @@ class TUISession:
         # Terrarium mode
         self._terrarium_tabs: list[str] | None = None
         self._active_target: str = ""  # which tab output is currently targeting
+        # Widget culling config
+        self._max_chat_widgets = max_chat_widgets
+        self._cull_keep = cull_keep
+        self._load_batch = load_batch
+        # "Load older" system: stores widgets that were culled or not mounted
+        # on resume. Keyed by target. Each is a list of widgets (oldest first).
+        self._older_widgets: dict[str, list] = {}  # target -> [widget, ...]
+        self._culled_count: dict[str, int] = {}  # target -> count of culled widgets
 
     def set_terrarium_tabs(self, tabs: list[str]) -> None:
         """Configure terrarium mode before start()."""
@@ -357,26 +381,96 @@ class TUISession:
     def _cull_chat_widgets(self, chat: VerticalScroll) -> None:
         """Remove old widgets when chat has too many, keeping recent ones."""
         children = list(chat.children)
-        if len(children) <= MAX_CHAT_WIDGETS:
+        if len(children) <= self._max_chat_widgets:
             return
-        # Remove oldest widgets, keep the last CULL_KEEP
-        to_remove = children[: len(children) - CULL_KEEP]
-        # Check if first remaining widget is already a "load more" button
-        has_header = len(children) > CULL_KEEP and hasattr(
-            children[0], "_is_cull_header"
-        )
+
+        remove_count = len(children) - self._cull_keep
+        to_remove = children[:remove_count]
+
+        target = self._active_target or "_default"
+        self._culled_count[target] = self._culled_count.get(target, 0) + remove_count
+
         for w in to_remove:
             w.remove()
-        # Add a "culled" header if not already present
-        remaining = list(chat.children)
-        if remaining and not has_header:
-            count = len(to_remove)
+
+        # Update or add LoadOlderButton at top
+        self._update_load_older_button(chat, target)
+
+    def _update_load_older_button(self, chat: VerticalScroll, target: str) -> None:
+        """Add/update the 'Load older' button at the top of chat."""
+        # How many widgets can we load from the stored older_widgets?
+        available = len(self._older_widgets.get(target, []))
+        culled = self._culled_count.get(target, 0)
+        total_hidden = available + culled
+
+        if total_hidden <= 0:
+            return
+
+        # Remove existing button
+        for child in list(chat.children):
+            if isinstance(child, LoadOlderButton):
+                child.remove()
+                break
+
+        # Only show button if there are stored widgets to load
+        if available > 0:
+            btn = LoadOlderButton(available)
+            first = list(chat.children)
+            if first:
+                chat.mount(btn, before=first[0])
+            else:
+                chat.mount(btn)
+        elif culled > 0:
+            # Culled live messages (no stored data to reload)
             header = Static(
-                f"[{count} earlier messages hidden. Scroll up was here.]",
+                f"[{culled} earlier messages not available]",
                 classes="cull-header",
             )
-            header._is_cull_header = True  # type: ignore[attr-defined]
-            chat.mount(header, before=remaining[0])
+            first = list(chat.children)
+            if first:
+                chat.mount(header, before=first[0])
+
+    def store_older_widgets(self, target: str, widgets: list) -> None:
+        """Store widgets for 'Load older' (from resume truncation)."""
+        self._older_widgets[target] = widgets
+
+    def load_older_batch(self, target: str = "") -> None:
+        """Load a batch of older widgets into the chat."""
+        target = target or self._active_target or "_default"
+        stored = self._older_widgets.get(target, [])
+        if not stored:
+            return
+
+        scroll_id = self._get_chat_scroll_id(target)
+        batch_size = self._load_batch
+        # Take from the end of stored (most recent of the older messages)
+        batch = stored[-batch_size:]
+        self._older_widgets[target] = (
+            stored[:-batch_size] if batch_size < len(stored) else []
+        )
+
+        def _do():
+            try:
+                chat = self._app.query_one(f"#{scroll_id}", VerticalScroll)
+                # Remove the LoadOlderButton
+                for child in list(chat.children):
+                    if isinstance(child, LoadOlderButton):
+                        child.remove()
+                        break
+                # Prepend the batch
+                first = list(chat.children)
+                if first:
+                    for w in reversed(batch):
+                        chat.mount(w, before=first[0])
+                else:
+                    for w in batch:
+                        chat.mount(w)
+                # Add new button if more available
+                self._update_load_older_button(chat, target)
+            except Exception:
+                pass
+
+        self._safe_call(_do)
 
     # ── Chat area ───────────────────────────────────────────────
 
@@ -776,6 +870,7 @@ class TUISession:
             agent_name=self.agent_name,
             terrarium_tabs=self._terrarium_tabs,
         )
+        self._app.tui_session = self
         self.running = True
         self._stop_event.clear()
 

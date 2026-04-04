@@ -4,11 +4,12 @@ import asyncio
 from typing import Any
 
 from textual.containers import VerticalScroll
-from textual.widgets import Markdown, Static
+from textual.widgets import Markdown
 
 from kohakuterrarium.builtins.tui.session import CULL_KEEP, TUISession
 from kohakuterrarium.builtins.tui.widgets import (
     CompactSummaryBlock,
+    LoadOlderButton,
     SubAgentBlock,
     ToolBlock,
     TriggerMessage,
@@ -294,15 +295,17 @@ class TUIOutput(BaseOutputModule):
                     try:
                         ws = _build_resume_widgets(turns)
                         chat = app.query_one(f"#{scroll_id}", VerticalScroll)
-                        # Only mount the last N widgets to avoid perf issues
+                        # Only mount the last N widgets; store older for "Load older"
                         if len(ws) > CULL_KEEP:
-                            hidden = len(ws) - CULL_KEEP
-                            header = Static(
-                                f"[{hidden} earlier messages hidden]",
-                                classes="cull-header",
-                            )
-                            header._is_cull_header = True  # type: ignore
-                            ws = [header] + ws[-CULL_KEEP:]
+                            older = ws[: len(ws) - CULL_KEEP]
+                            mount_ws = ws[-CULL_KEEP:]
+                            # Store older widgets on TUISession for loading later
+                            t = self._default_target or "_default"
+                            self._tui.store_older_widgets(t, older)
+                            # Add "Load older" button
+                            btn = LoadOlderButton(len(older))
+                            mount_ws = [btn] + mount_ws
+                            ws = mount_ws
                         await chat.mount_all(ws)
                         chat.scroll_end(animate=False)
                     except Exception as e:
