@@ -35,6 +35,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "kohakuvault>=0.7.0",
     "textual>=3.0.0",
+    "html2text>=2024.0.0",
     "tomli>=2.0.0; python_version<'3.11'",
     "gitpython>=3.1.0",
 ]
