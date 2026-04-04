@@ -61,6 +61,7 @@ class AgentTUI(App):
     #chat-tabs { height: 1fr; }
     #quick-status { height: 1; color: $kohaku-amber; padding: 0 1; }
     #input-box { dock: bottom; }
+    #queued-area { height: auto; max-height: 6; padding: 0 1; }
     #right-status-panel { height: 1fr; overflow-y: auto; padding: 1; }
 
     .chat-tab-scroll { height: 1fr; padding: 0 1; }
@@ -109,6 +110,7 @@ class AgentTUI(App):
                 else:
                     yield VerticalScroll(id="chat-scroll")
                 yield Static("", id="quick-status")
+                yield Vertical(id="queued-area")
                 yield ChatInput(id="input-box")
             with Vertical(id="right-panel"):
                 with VerticalScroll(id="right-status-panel"):
@@ -128,16 +130,19 @@ class AgentTUI(App):
         text = event.value.strip()
         if not text:
             return
-        chat = self._get_active_chat()
-        if chat:
-            if self._is_processing:
-                # Agent is busy: show as queued (dashed amber border)
-                qw = QueuedMessage(text)
-                self._queued_widgets.append(qw)
-                chat.mount(qw)
-            else:
+        if self._is_processing:
+            # Agent is busy: show in queued area (above input, not in chat)
+            qw = QueuedMessage(text)
+            self._queued_widgets.append(qw)
+            try:
+                self.query_one("#queued-area", Vertical).mount(qw)
+            except Exception:
+                pass
+        else:
+            chat = self._get_active_chat()
+            if chat:
                 chat.mount(UserMessage(text))
-            chat.scroll_end(animate=False)
+                chat.scroll_end(animate=False)
         self._input_queue.put_nowait(text)
 
     def on_chat_input_edit_queued(self, event: ChatInput.EditQueued) -> None:
@@ -680,13 +685,21 @@ class TUISession:
     def start_thinking(self) -> None:
         if self._app and self._app.is_running:
             self._app._is_processing = True
-            # Promote any queued messages to normal (agent will process them)
-            for qw in self._app._queued_widgets:
-                try:
-                    qw.promote()
-                except Exception:
-                    pass
-            self._app._queued_widgets.clear()
+            # Move queued messages from queue area into chat (promoted to UserMessage style)
+            if self._app._queued_widgets:
+                chat = self._app._get_active_chat()
+                for qw in self._app._queued_widgets:
+                    try:
+                        # Remove from queue area, mount as UserMessage in chat
+                        text = qw.message_text
+                        qw.remove()
+                        if chat:
+                            chat.mount(UserMessage(text))
+                    except Exception:
+                        pass
+                if chat:
+                    chat.scroll_end(animate=False)
+                self._app._queued_widgets.clear()
             try:
                 self._app.start_thinking_animation()
             except Exception:
