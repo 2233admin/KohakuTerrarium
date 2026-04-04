@@ -163,9 +163,9 @@ def main() -> int:
     embed_parser.add_argument("session", help="Session name/prefix or path")
     embed_parser.add_argument(
         "--provider",
-        choices=["model2vec", "sentence-transformer", "api"],
-        default="model2vec",
-        help="Embedding provider (default: model2vec)",
+        choices=["auto", "model2vec", "sentence-transformer", "api"],
+        default="auto",
+        help="Embedding provider (default: auto, prefers jina v5 nano)",
     )
     embed_parser.add_argument(
         "--model", default=None, help="Model name (default: provider-dependent)"
@@ -769,7 +769,7 @@ def search_cli(
         embedder = None
         if mode in ("semantic", "hybrid", "auto"):
             try:
-                embedder = create_embedder({"provider": "model2vec"})
+                embedder = create_embedder({"provider": "auto"})
             except Exception:
                 pass
 
