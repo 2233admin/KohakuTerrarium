@@ -631,10 +631,16 @@ class AgentHandlersMixin:
             elif result is not None:
                 content = result.output if result.output else ""
                 status = "OK" if result.exit_code == 0 else f"exit={result.exit_code}"
+                # For TUI display: extract text preview from multimodal content
+                preview = (
+                    result.get_text_output()[:5000]
+                    if hasattr(result, "get_text_output")
+                    else str(content)[:5000]
+                )
                 self.output_router.notify_activity(
                     "tool_done",
                     f"[{label}] {status}",
-                    metadata={"job_id": job_id, "output": content[:5000]},
+                    metadata={"job_id": job_id, "output": preview},
                 )
             else:
                 content = ""

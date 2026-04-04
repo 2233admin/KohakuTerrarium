@@ -1,7 +1,8 @@
 """
-Read tool - read file contents.
+Read tool - read file contents (text and images).
 """
 
+import base64
 import os
 import time
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any
 import aiofiles
 
 from kohakuterrarium.builtins.tools.registry import register_builtin
+from kohakuterrarium.llm.message import ImagePart, TextPart
 from kohakuterrarium.modules.tool.base import (
     BaseTool,
     ExecutionMode,
@@ -54,7 +56,11 @@ class ReadTool(BaseTool):
         # Resolve path
         file_path = Path(path).expanduser().resolve()
 
-        # Binary file guard
+        # Image files: return as multimodal content
+        if _is_image_file(file_path):
+            return await self._read_image(file_path, path)
+
+        # Binary file guard (non-image binaries)
         if is_binary_file(file_path):
             return ToolResult(
                 error=f"Binary file detected ({file_path.suffix}). "
@@ -184,4 +190,92 @@ Line-numbered file contents. Line numbers are 1-indexed in the output.
 - Use `grep` to locate relevant lines, then `read` with offset/limit to
   examine context.
 - For large files, read in chunks with offset/limit.
+- Image files (.png, .jpg, .gif, .webp, .svg) are returned as images
+  for visual inspection by the model.
 """
+
+    async def _read_image(self, file_path: Path, original_path: str) -> ToolResult:
+        """Read an image file and return as multimodal content."""
+        if not file_path.exists():
+            return ToolResult(error=f"File not found: {original_path}")
+
+        max_image_bytes = 20 * 1024 * 1024  # 20 MB limit
+        file_size = file_path.stat().st_size
+
+        if file_size > max_image_bytes:
+            return ToolResult(
+                error=f"Image too large ({file_size // 1024}KB). "
+                f"Max: {max_image_bytes // (1024 * 1024)}MB."
+            )
+
+        suffix = file_path.suffix.lower()
+        mime = _IMAGE_MIME.get(suffix, "image/png")
+
+        try:
+            async with aiofiles.open(file_path, "rb") as f:
+                data = await f.read()
+            b64 = base64.b64encode(data).decode("ascii")
+            data_url = f"data:{mime};base64,{b64}"
+
+            logger.info(
+                "Image read",
+                file_path=str(file_path),
+                size_kb=len(data) // 1024,
+                mime=mime,
+            )
+
+            return ToolResult(
+                output=[
+                    TextPart(
+                        text=f"Image: {original_path} ({len(data) // 1024}KB, {mime})"
+                    ),
+                    ImagePart(
+                        url=data_url,
+                        detail="auto",
+                        source_type="file",
+                        source_name=file_path.name,
+                    ),
+                ],
+                exit_code=0,
+            )
+        except Exception as e:
+            return ToolResult(error=f"Failed to read image: {e}")
+
+
+# Image extensions and MIME types
+_IMAGE_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".tiff",
+    ".tif",
+    ".ico",
+    ".svg",
+    ".heif",
+    ".heic",
+    ".avif",
+}
+
+_IMAGE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+    ".heif": "image/heif",
+    ".heic": "image/heic",
+    ".avif": "image/avif",
+}
+
+
+def _is_image_file(path: Path) -> bool:
+    """Check if a file is a supported image format."""
+    return path.suffix.lower() in _IMAGE_EXTENSIONS
