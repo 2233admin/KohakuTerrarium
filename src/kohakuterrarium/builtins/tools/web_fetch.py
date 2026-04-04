@@ -10,6 +10,7 @@ Tiered fallback (uses best available):
 
 from typing import Any
 
+import html2text
 import httpx
 
 from kohakuterrarium.builtins.tools.registry import register_builtin
@@ -248,23 +249,8 @@ async def _fetch_naive(url: str) -> str:
         resp.raise_for_status()
         html = resp.text
 
-    # Try html2text if available
-    try:
-        import html2text
-
-        h = html2text.HTML2Text()
-        h.ignore_links = False
-        h.ignore_images = True
-        h.body_width = 0  # no wrapping
-        return h.handle(html)
-    except ImportError:
-        pass
-
-    # Absolute fallback: strip HTML tags with regex
-    import re
-
-    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    h = html2text.HTML2Text()
+    h.ignore_links = False
+    h.ignore_images = True
+    h.body_width = 0  # no wrapping
+    return h.handle(html)
