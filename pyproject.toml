@@ -49,7 +49,7 @@ Issues = "https://github.com/Kohaku-Lab/KohakuTerrarium/issues"
 kt = "kohakuterrarium.__main__:main"
 
 [project.optional-dependencies]
-web = [
+api = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
 ]
@@ -68,8 +68,24 @@ asr = [
     "sounddevice>=0.4.0",
     "numpy>=1.20.0",
 ]
+# Web tools: fetch pages + search
+web = [
+    "trafilatura>=2.0.0",
+    "ddgs>=9.0.0",
+]
+# Full browser rendering for web_fetch
+browser = [
+    "crawl4ai>=0.8.0",
+]
+# Embedding models for session memory search
+embeddings-light = [
+    "model2vec>=0.8.0",
+]
+embeddings = [
+    "sentence-transformers>=4.0.0",
+]
 all = [
-    "KohakuTerrarium[web,dev]",
+    "KohakuTerrarium[api,dev,web,embeddings-light]",
 ]
 
 [tool.setuptools]
