@@ -21,6 +21,12 @@ from kohakuterrarium.studio.profiles import (
     show_profile,
 )
 from kohakuterrarium.studio.sessions import SessionManager
+from kohakuterrarium.studio.statusline import StatusLineBuilder
+from kohakuterrarium.studio.themes import (
+    get_theme,
+    list_themes,
+    preview_theme,
+)
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -122,6 +128,23 @@ def add_studio_subparser(subparsers: argparse._SubParsersAction) -> None:
     incognito_p = session_sub.add_parser("incognito", help="Launch ephemeral session")
     incognito_p.add_argument("--profile", default=None, help="Profile to apply")
 
+    # studio statusline {install,preview,uninstall}
+    statusline_p = studio_sub.add_parser("statusline", help="Manage status line")
+    statusline_sub = statusline_p.add_subparsers(dest="statusline_action")
+    statusline_sub.add_parser("install", help="Install statusline runner")
+    statusline_sub.add_parser("preview", help="Preview statusline output")
+    statusline_sub.add_parser("uninstall", help="Remove statusline runner")
+
+    # studio theme {list,show,apply}
+    theme_p = studio_sub.add_parser("theme", help="Manage themes")
+    theme_sub = theme_p.add_subparsers(dest="theme_action")
+    theme_sub.add_parser("list", help="List available themes")
+    show_theme_p = theme_sub.add_parser("show", help="Preview a theme")
+    show_theme_p.add_argument("name", help="Theme name")
+    apply_theme_p = theme_sub.add_parser("apply", help="Apply a theme to profile")
+    apply_theme_p.add_argument("name", help="Theme name")
+    apply_theme_p.add_argument("--profile", default=None, help="Target profile")
+
 
 def handle_studio_command(args: argparse.Namespace) -> int:
     """Dispatch studio subcommand."""
@@ -142,8 +165,15 @@ def handle_studio_command(args: argparse.Namespace) -> int:
             return _handle_sessions_list()
         case "session":
             return _handle_session_subcommand(args)
+        case "statusline":
+            return _handle_statusline_subcommand(args)
+        case "theme":
+            return _handle_theme_subcommand(args)
         case _:
-            print("Usage: kt studio {init,launch,apply,profiles,profile,doctor,sessions,session}")
+            print(
+                "Usage: kt studio"
+                " {init,launch,apply,profiles,profile,doctor,sessions,session,statusline,theme}"
+            )
             return 0
 
 
@@ -397,4 +427,77 @@ def _handle_session_subcommand(args: argparse.Namespace) -> int:
             )
         case _:
             print("Usage: kt studio session {name,resume,fork,inspect,delete,export,incognito}")
+            return 0
+
+
+def _handle_statusline_subcommand(args: argparse.Namespace) -> int:
+    """Dispatch statusline sub-subcommand."""
+    match getattr(args, "statusline_action", None):
+        case "install":
+            config = load_studio_config()
+            profile_name = config.active_profile
+            profile = config.profiles.get(profile_name) if profile_name else None
+            sl_config = (
+                profile.statusline if profile and profile.statusline else StatuslineConfig()
+            )
+            theme_name = profile.theme if profile else None
+            builder = StatusLineBuilder(sl_config, theme_name=theme_name)
+            builder.install()
+            print(f"Statusline installed (style={sl_config.style}, segments={sl_config.segments})")
+            return 0
+        case "preview":
+            config = load_studio_config()
+            profile_name = config.active_profile
+            profile = config.profiles.get(profile_name) if profile_name else None
+            sl_config = (
+                profile.statusline if profile and profile.statusline else StatuslineConfig()
+            )
+            builder = StatusLineBuilder(sl_config)
+            print(builder.preview())
+            return 0
+        case "uninstall":
+            builder = StatusLineBuilder(StatuslineConfig())
+            builder.uninstall()
+            print("Statusline uninstalled")
+            return 0
+        case _:
+            print("Usage: kt studio statusline {install,preview,uninstall}")
+            return 0
+
+
+def _handle_theme_subcommand(args: argparse.Namespace) -> int:
+    """Dispatch theme sub-subcommand."""
+    match getattr(args, "theme_action", None):
+        case "list":
+            config = load_studio_config()
+            profile_name = config.active_profile
+            profile = config.profiles.get(profile_name) if profile_name else None
+            active_theme = profile.theme if profile else None
+            for name in list_themes():
+                marker = " *" if name == active_theme else ""
+                print(f"  {name}{marker}")
+            return 0
+        case "show":
+            result = preview_theme(args.name)
+            if not result:
+                print(f"Theme not found: {args.name}")
+                return 1
+            print(result)
+            return 0
+        case "apply":
+            if get_theme(args.name) is None:
+                print(f"Theme not found: {args.name}")
+                return 1
+            config = load_studio_config()
+            profile_name = getattr(args, "profile", None) or config.active_profile
+            profile = config.profiles.get(profile_name)
+            if profile is None:
+                print(f"Profile not found: {profile_name}")
+                return 1
+            profile.theme = args.name
+            save_studio_config(config)
+            print(f"Applied theme '{args.name}' to profile '{profile_name}'")
+            return 0
+        case _:
+            print("Usage: kt studio theme {list,show,apply}")
             return 0
