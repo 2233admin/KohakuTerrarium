@@ -2,10 +2,10 @@
 
 **Project:** KohakuTerrarium
 **Milestone:** v0.3.0
-**Last activity:** 2026-04-05 - Completed Phase 5b new targets + cross-tool sessions (260405-rf0)
+**Last activity:** 2026-04-05 - Completed Phase 5c workbench tools (260405-ruy)
 
 ### Current Phase
-Phase 1-5b: kt studio 6 targets + cross-tool session aggregation (complete)
+Phase 1-5c: kt studio workbench tools (cost, record, compare, completion, diff) (complete)
 
 ### Completed
 - 260405-nm0: kt studio subsystem -- config/profiles/launcher/CLI (43 tests, 738 lines)
@@ -24,6 +24,8 @@ Phase 1-5b: kt studio 6 targets + cross-tool session aggregation (complete)
 - Base settings loading stays in ProfileLauncher to preserve test patch points
 - OpenClaw target uses httpx for endpoint detection (httpx already a project dep, server not CLI)
 - 6 registered targets: claude-code, copilot, codex, gemini, openclaw, aider
+- Handler extraction: cli.py keeps subparser defs only, handlers.py owns all dispatch + handler functions
+- New workbench module dispatch uses lazy imports in handlers.py match cases to avoid circular deps
 
 ### Blockers/Concerns
 None
@@ -38,3 +40,4 @@ None
 | 260405-p5r | kt studio Phase 4 copilot CLI integration | 2026-04-05 | 171e9f8 | [260405-p5r](./quick/260405-p5r-kt-studio-phase-4-copilot-cli-integratio/) |
 | 260405-r16 | kt studio Phase 5a target abstraction + launcher refactor | 2026-04-05 | 4e9308a | [260405-r16](./quick/260405-r16-kt-studio-phase-5a-target-abstraction-la/) |
 | 260405-rf0 | kt studio Phase 5b new targets + cross-tool sessions | 2026-04-05 | 6c86850 | [260405-rf0](./quick/260405-rf0-kt-studio-phase-5b-new-targets-codex-gem/) |
+| 260405-ruy | kt studio Phase 5c workbench tools | 2026-04-05 | d225f2e | [260405-ruy](./quick/260405-ruy-kt-studio-phase-5c-workbench-tools-cost-/) |
