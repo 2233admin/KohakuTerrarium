@@ -81,7 +81,9 @@ def add_studio_subparser(subparsers: argparse._SubParsersAction) -> None:
     create_p = profile_sub.add_parser("create", help="Create a new profile")
     create_p.add_argument("name", help="Profile name")
     create_p.add_argument("--model", default="sonnet", help="Model (default: sonnet)")
-    create_p.add_argument("--effort", default="high", help="Effort level (default: high)")
+    create_p.add_argument(
+        "--effort", default="high", help="Effort level (default: high)"
+    )
     create_p.add_argument("--theme", default=None, help="Theme name")
 
     show_p = profile_sub.add_parser("show", help="Show profile details")
@@ -123,7 +125,9 @@ def add_studio_subparser(subparsers: argparse._SubParsersAction) -> None:
 
     export_p = session_sub.add_parser("export", help="Export session transcript")
     export_p.add_argument("name", help="Session name")
-    export_p.add_argument("--format", default="md", choices=["md", "html"], help="Output format")
+    export_p.add_argument(
+        "--format", default="md", choices=["md", "html"], help="Output format"
+    )
 
     incognito_p = session_sub.add_parser("incognito", help="Launch ephemeral session")
     incognito_p.add_argument("--profile", default=None, help="Profile to apply")
@@ -283,7 +287,9 @@ def _handle_profile_subcommand(args: argparse.Namespace) -> int:
                     effort=args.effort,
                     theme=args.theme,
                 )
-                print(f"Created profile '{args.name}' (model={p.model}, effort={p.effort})")
+                print(
+                    f"Created profile '{args.name}' (model={p.model}, effort={p.effort})"
+                )
                 return 0
             except ValueError as e:
                 print(f"Error: {e}")
@@ -303,7 +309,9 @@ def _handle_profile_subcommand(args: argparse.Namespace) -> int:
             if p.hooks:
                 print(f"Hooks:   {len(p.hooks)} event(s)")
             if p.statusline:
-                print(f"Status:  {p.statusline.style} ({', '.join(p.statusline.segments)})")
+                print(
+                    f"Status:  {p.statusline.style} ({', '.join(p.statusline.segments)})"
+                )
             if p.permissions:
                 print(f"Perms:   {p.permissions}")
             if p.append_system_prompt_file:
@@ -361,7 +369,9 @@ def _handle_sessions_list() -> int:
         uuid_short = entry.uuid[:8] if entry.uuid else ""
         tags_str = ", ".join(entry.tags) if entry.tags else ""
         created_short = entry.created[:19] if entry.created else ""
-        print(f"{name:<20} {uuid_short:<10} {entry.project_dir:<25} {created_short:<22} {tags_str}")
+        print(
+            f"{name:<20} {uuid_short:<10} {entry.project_dir:<25} {created_short:<22} {tags_str}"
+        )
     return 0
 
 
@@ -388,9 +398,7 @@ def _handle_session_subcommand(args: argparse.Namespace) -> int:
                 return 1
         case "fork":
             try:
-                return manager.fork_session(
-                    args.name, getattr(args, "new_name", None)
-                )
+                return manager.fork_session(args.name, getattr(args, "new_name", None))
             except KeyError as e:
                 print(f"Error: {e}")
                 return 1
@@ -422,11 +430,11 @@ def _handle_session_subcommand(args: argparse.Namespace) -> int:
                 print(f"Error: {e}")
                 return 1
         case "incognito":
-            return manager.launch_incognito(
-                profile=getattr(args, "profile", None)
-            )
+            return manager.launch_incognito(profile=getattr(args, "profile", None))
         case _:
-            print("Usage: kt studio session {name,resume,fork,inspect,delete,export,incognito}")
+            print(
+                "Usage: kt studio session {name,resume,fork,inspect,delete,export,incognito}"
+            )
             return 0
 
 
@@ -438,19 +446,25 @@ def _handle_statusline_subcommand(args: argparse.Namespace) -> int:
             profile_name = config.active_profile
             profile = config.profiles.get(profile_name) if profile_name else None
             sl_config = (
-                profile.statusline if profile and profile.statusline else StatuslineConfig()
+                profile.statusline
+                if profile and profile.statusline
+                else StatuslineConfig()
             )
             theme_name = profile.theme if profile else None
             builder = StatusLineBuilder(sl_config, theme_name=theme_name)
             builder.install()
-            print(f"Statusline installed (style={sl_config.style}, segments={sl_config.segments})")
+            print(
+                f"Statusline installed (style={sl_config.style}, segments={sl_config.segments})"
+            )
             return 0
         case "preview":
             config = load_studio_config()
             profile_name = config.active_profile
             profile = config.profiles.get(profile_name) if profile_name else None
             sl_config = (
-                profile.statusline if profile and profile.statusline else StatuslineConfig()
+                profile.statusline
+                if profile and profile.statusline
+                else StatuslineConfig()
             )
             builder = StatusLineBuilder(sl_config)
             print(builder.preview())

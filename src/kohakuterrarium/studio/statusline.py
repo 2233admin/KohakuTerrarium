@@ -190,9 +190,7 @@ _RENDER_TEMPLATES: dict[str, str] = {
 class StatusLineBuilder:
     """Builds standalone statusline runner scripts and manages installation."""
 
-    def __init__(
-        self, config: StatuslineConfig, theme_name: str | None = None
-    ) -> None:
+    def __init__(self, config: StatuslineConfig, theme_name: str | None = None) -> None:
         self.config = config
         self.theme_name = theme_name
 
@@ -277,9 +275,7 @@ class StatusLineBuilder:
             try:
                 settings = json.loads(target.read_text(encoding="utf-8"))
                 settings.pop("statusLine", None)
-                target.write_text(
-                    json.dumps(settings, indent=2), encoding="utf-8"
-                )
+                target.write_text(json.dumps(settings, indent=2), encoding="utf-8")
                 logger.info("Removed statusLine from settings: %s", target)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning("Failed to update settings: %s", e)
