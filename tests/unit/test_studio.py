@@ -354,9 +354,9 @@ class TestStudioCLI:
         """Init creates studio.yaml."""
         config_path = tmp_path / "studio.yaml"
         with patch(
-            "kohakuterrarium.studio.cli.STUDIO_CONFIG_PATH", config_path
+            "kohakuterrarium.studio.handlers.STUDIO_CONFIG_PATH", config_path
         ), patch(
-            "kohakuterrarium.studio.cli.save_studio_config",
+            "kohakuterrarium.studio.handlers.save_studio_config",
             wraps=lambda c, p=None: save_studio_config(c, config_path),
         ):
             args = argparse.Namespace(studio_command="init")
