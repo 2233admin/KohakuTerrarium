@@ -15,7 +15,6 @@ from kohakuterrarium.terrarium.config import (
     load_terrarium_config,
 )
 
-
 # ---------------------------------------------------------------------------
 # format_tool_call_example
 # ---------------------------------------------------------------------------
@@ -93,12 +92,18 @@ MANAGED_TUI_DIR = PROJECT_ROOT / "examples" / "terrariums" / "swe_team_managed_t
 class TestUnifiedCreatureConfig:
     """Terrarium creatures use the same config format as standalone."""
 
+    @pytest.mark.skipif(
+        not SWE_TEAM_DIR.exists(), reason="terrariums/swe_team not present"
+    )
     def test_swe_team_creatures_have_config_data(self):
         config = load_terrarium_config(SWE_TEAM_DIR)
         for creature in config.creatures:
             assert isinstance(creature.config_data, dict)
             assert "base_config" in creature.config_data
 
+    @pytest.mark.skipif(
+        not SWE_TEAM_DIR.exists(), reason="terrariums/swe_team not present"
+    )
     def test_swe_team_has_root(self):
         config = load_terrarium_config(SWE_TEAM_DIR)
         assert config.root is not None
@@ -115,6 +120,9 @@ class TestUnifiedCreatureConfig:
         root_input = config.root.config_data.get("input", {})
         assert root_input.get("type") == "tui"
 
+    @pytest.mark.skipif(
+        not SWE_TEAM_DIR.exists(), reason="terrariums/swe_team not present"
+    )
     def test_creature_config_data_matches_standalone_format(self):
         """A creature in terrarium has the same keys as a standalone config."""
         config = load_terrarium_config(SWE_TEAM_DIR)

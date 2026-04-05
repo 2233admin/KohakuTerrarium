@@ -1,13 +1,11 @@
 """Tests for the package manager (kt install/list/resolve)."""
 
-import shutil
 from pathlib import Path
 
 import pytest
 import yaml
 
 from kohakuterrarium.packages import (
-    PACKAGES_DIR,
     install_package,
     is_package_ref,
     list_packages,
@@ -93,9 +91,12 @@ class TestInstallLocal:
     def test_install_editable(self, tmp_packages, sample_package):
         name = install_package(str(sample_package), editable=True)
         assert name == "test-pack"
-        installed = tmp_packages / "test-pack"
-        assert installed.is_symlink()
-        assert installed.resolve() == sample_package.resolve()
+        # Editable uses a .link pointer file, not a symlink
+        link_file = tmp_packages / "test-pack.link"
+        assert link_file.exists()
+        assert Path(link_file.read_text().strip()) == sample_package.resolve()
+        # No directory should be created
+        assert not (tmp_packages / "test-pack").exists()
 
     def test_install_name_override(self, tmp_packages, sample_package):
         name = install_package(str(sample_package), name_override="custom-name")
@@ -120,7 +121,7 @@ class TestUninstall:
     def test_uninstall_editable(self, tmp_packages, sample_package):
         install_package(str(sample_package), editable=True)
         assert uninstall_package("test-pack")
-        assert not (tmp_packages / "test-pack").exists()
+        assert not (tmp_packages / "test-pack.link").exists()
         # Source should still exist
         assert sample_package.exists()
 

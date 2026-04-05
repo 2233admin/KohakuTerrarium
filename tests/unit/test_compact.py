@@ -1,7 +1,7 @@
 """Comprehensive tests for the auto-compact system."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -84,15 +84,11 @@ class TestShouldCompact:
         mgr._compacting = True
         assert not mgr.should_compact(prompt_tokens=900)
 
-    def test_fallback_char_estimation(self):
+    def test_no_char_estimation_fallback(self):
         mgr, conv = _make_manager(max_tokens=100, threshold=0.50)
-        # Conv has ~20 messages * 50 chars + overhead
-        # Estimated tokens = chars / 4
-        chars = conv.get_context_length()
-        estimated_tokens = chars / 4
-        # Should trigger if estimated_tokens >= 100 * 0.50 = 50
-        assert estimated_tokens > 50
-        assert mgr.should_compact(prompt_tokens=0)
+        # should_compact is token-based only; prompt_tokens=0 means
+        # no token info available, so compaction should NOT trigger
+        assert not mgr.should_compact(prompt_tokens=0)
 
     def test_no_controller(self):
         mgr = CompactManager(CompactConfig(max_tokens=100))

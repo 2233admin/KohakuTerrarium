@@ -158,6 +158,44 @@ class TestMergeConfigs:
         result = _merge_configs(base, child)
         assert "base_config" not in result
 
+    def test_no_inherit_replaces_tools(self):
+        base = {
+            "tools": [{"name": "bash"}, {"name": "read"}, {"name": "write"}],
+            "subagents": [{"name": "explore"}, {"name": "plan"}],
+        }
+        child = {
+            "no_inherit": ["tools"],
+            "tools": [{"name": "think"}],
+        }
+        result = _merge_configs(base, child)
+        # tools replaced (not extended)
+        assert [t["name"] for t in result["tools"]] == ["think"]
+        # subagents still inherited (not in no_inherit)
+        assert [s["name"] for s in result["subagents"]] == ["explore", "plan"]
+        # no_inherit itself not in result
+        assert "no_inherit" not in result
+
+    def test_no_inherit_replaces_both(self):
+        base = {
+            "tools": [{"name": "bash"}, {"name": "read"}],
+            "subagents": [{"name": "explore"}],
+        }
+        child = {
+            "no_inherit": ["tools", "subagents"],
+            "tools": [{"name": "think"}],
+            "subagents": [],
+        }
+        result = _merge_configs(base, child)
+        assert [t["name"] for t in result["tools"]] == ["think"]
+        assert result["subagents"] == []
+
+    def test_no_inherit_empty_keeps_extend(self):
+        base = {"tools": [{"name": "bash"}]}
+        child = {"no_inherit": [], "tools": [{"name": "think"}]}
+        result = _merge_configs(base, child)
+        # Empty no_inherit = normal extend behavior
+        assert [t["name"] for t in result["tools"]] == ["bash", "think"]
+
 
 class TestResolveBaseConfigPath:
     """Tests for base_config path resolution."""
@@ -293,6 +331,23 @@ class TestLoadAgentConfigInheritance:
         assert "grep" in tool_names
         assert "bash" in tool_names
 
+    def test_inline_system_prompt_appended_to_chain(self, tmp_creatures):
+        """Inline system_prompt from child is appended to file-based chain."""
+        from kohakuterrarium.core.config import build_agent_config
+
+        general = tmp_creatures / "creatures" / "general"
+        config_data = {
+            "name": "inline_test",
+            "base_config": str(general),
+            "system_prompt": "ROLE: You are a specialized worker.",
+        }
+        config = build_agent_config(config_data, tmp_creatures)
+
+        # Base prompt from general's system.md is present
+        assert "General Agent" in config.system_prompt
+        # Inline prompt is appended (not lost)
+        assert "ROLE: You are a specialized worker." in config.system_prompt
+
     def test_no_base_config(self, tmp_creatures):
         """Config without base_config loads normally."""
         general = tmp_creatures / "creatures" / "general"
@@ -360,7 +415,7 @@ class TestRealCreatures:
         # Researcher inherits all tools from general
         tool_names = [t.name for t in config.tools]
         assert "bash" in tool_names
-        assert "http" in tool_names
+        assert "web_fetch" in tool_names
         # General prompt is included (inherited)
         assert "KohakuTerrarium" in config.system_prompt
         # Researcher prompt is appended

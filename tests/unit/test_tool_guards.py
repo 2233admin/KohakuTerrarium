@@ -22,7 +22,6 @@ from kohakuterrarium.utils.file_guard import (
     is_binary_file,
 )
 
-
 # =============================================================================
 # FileReadState Tests
 # =============================================================================
@@ -345,7 +344,7 @@ class TestEditSearchReplaceIntegration:
         result = await self._read_then_edit(
             target,
             context,
-            {"old_string": "return 'world'", "new_string": "return 'universe'"},
+            {"old": "return 'world'", "new": "return 'universe'"},
         )
         assert result.success, f"Edit failed: {result.error}"
         assert "universe" in target.read_text()
@@ -362,7 +361,7 @@ class TestEditSearchReplaceIntegration:
         result = await self._read_then_edit(
             target,
             context,
-            {"old_string": "foo", "new_string": "bar"},
+            {"old": "foo", "new": "bar"},
         )
         assert not result.success
         assert "occurrences" in result.error
@@ -376,7 +375,7 @@ class TestEditSearchReplaceIntegration:
         result = await self._read_then_edit(
             target,
             context,
-            {"old_string": "foo", "new_string": "bar", "replace_all": True},
+            {"old": "foo", "new": "bar", "replace_all": True},
         )
         assert result.success, f"Edit failed: {result.error}"
         content = target.read_text()
@@ -392,7 +391,7 @@ class TestEditSearchReplaceIntegration:
         result = await self._read_then_edit(
             target,
             context,
-            {"old_string": "nonexistent_string_xyz", "new_string": "anything"},
+            {"old": "nonexistent_string_xyz", "new": "anything"},
         )
         assert not result.success
         assert "not found" in result.error
@@ -408,7 +407,7 @@ class TestEditSearchReplaceIntegration:
         edit_tool = EditTool()
 
         result = await edit_tool.execute(
-            {"path": str(target), "old_string": "hello", "new_string": "goodbye"},
+            {"path": str(target), "old": "hello", "new": "goodbye"},
             context=context,
         )
         assert not result.success
