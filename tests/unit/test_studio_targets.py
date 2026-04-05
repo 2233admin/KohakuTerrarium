@@ -1,8 +1,8 @@
-"""Tests for kt studio targets: registry, ClaudeCodeTarget, CopilotTarget, delegation."""
+"""Tests for kt studio targets: registry, ClaudeCodeTarget, CopilotTarget, and new targets."""
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,7 +16,11 @@ from kohakuterrarium.studio.targets import (
 )
 from kohakuterrarium.studio.targets.base import Target
 from kohakuterrarium.studio.targets.claude_code import ClaudeCodeTarget
+from kohakuterrarium.studio.targets.codex import CodexTarget
 from kohakuterrarium.studio.targets.copilot import CopilotTarget
+from kohakuterrarium.studio.targets.gemini import GeminiTarget
+from kohakuterrarium.studio.targets.openclaw import OpenClawTarget
+from kohakuterrarium.studio.targets.aider import AiderTarget
 
 
 # -- Registry tests --
@@ -202,3 +206,263 @@ class TestTargetIntegration:
         cmd = launcher.build_command(tmp_path / "settings.json")
         assert "claude" in cmd
         assert "haiku" in cmd
+
+
+# -- CodexTarget tests --
+
+
+class TestCodexTarget:
+    def test_detect_found(self):
+        """shutil.which returns path -> detect() returns Path."""
+        target = CodexTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.codex.shutil.which",
+            return_value="/usr/bin/codex",
+        ):
+            result = target.detect()
+        assert result == Path("/usr/bin/codex")
+
+    def test_detect_missing(self):
+        """shutil.which returns None -> detect() returns None."""
+        target = CodexTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.codex.shutil.which",
+            return_value=None,
+        ):
+            result = target.detect()
+        assert result is None
+
+    def test_build_command(self):
+        """build_command produces codex CLI args with model flag."""
+        target = CodexTarget()
+        profile = ProfileConfig(model="o4-mini")
+        cmd = target.build_command(profile)
+        assert cmd[0] == "codex"
+        assert "--model" in cmd
+        assert "o4-mini" in cmd
+
+    def test_list_models(self):
+        """list_models returns non-empty list including o4-mini."""
+        target = CodexTarget()
+        models = target.list_models()
+        assert len(models) > 0
+        assert "o4-mini" in models
+
+    def test_status_installed(self):
+        """status returns installed=True when CLI found."""
+        target = CodexTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.codex.shutil.which",
+            return_value="/usr/bin/codex",
+        ):
+            info = target.status()
+        assert info["installed"] is True
+        assert info["cli_path"] == "/usr/bin/codex"
+
+    def test_settings_path(self):
+        """settings_path returns ~/.codex path."""
+        target = CodexTarget()
+        sp = target.settings_path()
+        assert sp is not None
+        assert "codex" in str(sp).lower() or ".codex" in str(sp)
+
+
+# -- GeminiTarget tests --
+
+
+class TestGeminiTarget:
+    def test_detect_found(self):
+        """shutil.which returns path -> detect() returns Path."""
+        target = GeminiTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.gemini.shutil.which",
+            return_value="/usr/bin/gemini",
+        ):
+            result = target.detect()
+        assert result == Path("/usr/bin/gemini")
+
+    def test_detect_missing(self):
+        """shutil.which returns None -> detect() returns None."""
+        target = GeminiTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.gemini.shutil.which",
+            return_value=None,
+        ):
+            result = target.detect()
+        assert result is None
+
+    def test_build_command(self):
+        """build_command produces gemini CLI args with model flag."""
+        target = GeminiTarget()
+        profile = ProfileConfig(model="gemini-2.5-pro")
+        cmd = target.build_command(profile)
+        assert cmd[0] == "gemini"
+        assert "--model" in cmd
+        assert "gemini-2.5-pro" in cmd
+
+    def test_list_models(self):
+        """list_models returns non-empty list including gemini-2.5-pro."""
+        target = GeminiTarget()
+        models = target.list_models()
+        assert len(models) > 0
+        assert "gemini-2.5-pro" in models
+
+    def test_status_installed(self):
+        """status returns installed=True when CLI found."""
+        target = GeminiTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.gemini.shutil.which",
+            return_value="/usr/bin/gemini",
+        ):
+            info = target.status()
+        assert info["installed"] is True
+        assert info["cli_path"] == "/usr/bin/gemini"
+
+
+# -- OpenClawTarget tests --
+
+
+class TestOpenClawTarget:
+    def test_detect_reachable(self):
+        """httpx.get success -> detect() returns Path('openclaw')."""
+        target = OpenClawTarget()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        with patch(
+            "kohakuterrarium.studio.targets.openclaw.httpx.get",
+            return_value=mock_resp,
+        ):
+            result = target.detect()
+        assert result == Path("openclaw")
+
+    def test_detect_unreachable(self):
+        """httpx.get raises -> detect() returns None."""
+        target = OpenClawTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.openclaw.httpx.get",
+            side_effect=Exception("Connection refused"),
+        ):
+            result = target.detect()
+        assert result is None
+
+    def test_list_models_success(self):
+        """list_models parses /v1/models response."""
+        target = OpenClawTarget()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "data": [{"id": "claude-sonnet-4"}, {"id": "gpt-4o"}]
+        }
+        with patch(
+            "kohakuterrarium.studio.targets.openclaw.httpx.get",
+            return_value=mock_resp,
+        ):
+            models = target.list_models()
+        assert "claude-sonnet-4" in models
+        assert "gpt-4o" in models
+
+    def test_list_models_error(self):
+        """list_models returns empty list on connection error."""
+        target = OpenClawTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.openclaw.httpx.get",
+            side_effect=Exception("timeout"),
+        ):
+            models = target.list_models()
+        assert models == []
+
+    def test_build_command_raises(self):
+        """build_command raises NotImplementedError (server, not CLI)."""
+        target = OpenClawTarget()
+        profile = ProfileConfig()
+        with pytest.raises(NotImplementedError):
+            target.build_command(profile)
+
+    def test_custom_endpoint(self):
+        """OpenClawTarget accepts custom endpoint."""
+        target = OpenClawTarget(endpoint="http://myhost:9999")
+        assert target._endpoint == "http://myhost:9999"
+
+    def test_status_reachable(self):
+        """status returns installed=True when endpoint reachable."""
+        target = OpenClawTarget()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": [{"id": "m1"}, {"id": "m2"}]}
+        with patch(
+            "kohakuterrarium.studio.targets.openclaw.httpx.get",
+            return_value=mock_resp,
+        ):
+            info = target.status()
+        assert info["installed"] is True
+        assert info["model_count"] == 2
+
+
+# -- AiderTarget tests --
+
+
+class TestAiderTarget:
+    def test_detect_found(self):
+        """shutil.which returns path -> detect() returns Path."""
+        target = AiderTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.aider.shutil.which",
+            return_value="/usr/bin/aider",
+        ):
+            result = target.detect()
+        assert result == Path("/usr/bin/aider")
+
+    def test_detect_missing(self):
+        """shutil.which returns None -> detect() returns None."""
+        target = AiderTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.aider.shutil.which",
+            return_value=None,
+        ):
+            result = target.detect()
+        assert result is None
+
+    def test_build_command(self):
+        """build_command produces aider CLI args with model flag."""
+        target = AiderTarget()
+        profile = ProfileConfig(model="gpt-4o")
+        cmd = target.build_command(profile)
+        assert cmd[0] == "aider"
+        assert "--model" in cmd
+        assert "gpt-4o" in cmd
+
+    def test_list_models(self):
+        """list_models returns non-empty list."""
+        target = AiderTarget()
+        models = target.list_models()
+        assert len(models) > 0
+
+    def test_status_installed(self):
+        """status returns installed=True when CLI found."""
+        target = AiderTarget()
+        with patch(
+            "kohakuterrarium.studio.targets.aider.shutil.which",
+            return_value="/usr/bin/aider",
+        ):
+            info = target.status()
+        assert info["installed"] is True
+        assert info["cli_path"] == "/usr/bin/aider"
+
+    def test_settings_path(self):
+        """settings_path returns ~/.aider.conf.yml."""
+        target = AiderTarget()
+        sp = target.settings_path()
+        assert sp is not None
+        assert ".aider" in str(sp)
+
+
+# -- Updated registry count --
+
+
+class TestRegistryCount:
+    def test_list_targets_includes_all_six(self):
+        """list_targets() returns all 6 registered targets."""
+        targets = list_targets()
+        names = {t.name for t in targets}
+        assert names == {"claude-code", "copilot", "codex", "gemini", "openclaw", "aider"}
+        assert len(targets) == 6
