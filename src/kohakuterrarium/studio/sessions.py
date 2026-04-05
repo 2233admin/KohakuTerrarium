@@ -29,14 +29,16 @@ def _scan_project_sessions(project_path: Path) -> list[dict]:
 
     for jsonl_file in project_path.glob("*.jsonl"):
         stat = jsonl_file.stat()
-        results.append({
-            "uuid": jsonl_file.stem,
-            "project_dir": project_path.name,
-            "modified": datetime.fromtimestamp(
-                stat.st_mtime, tz=timezone.utc
-            ).isoformat(),
-            "size_bytes": stat.st_size,
-        })
+        results.append(
+            {
+                "uuid": jsonl_file.stem,
+                "project_dir": project_path.name,
+                "modified": datetime.fromtimestamp(
+                    stat.st_mtime, tz=timezone.utc
+                ).isoformat(),
+                "size_bytes": stat.st_size,
+            }
+        )
     return results
 
 
@@ -264,9 +266,7 @@ class SessionManager:
         entries = sorted(config.sessions.items(), key=lambda x: x[0])
 
         if tags:
-            entries = [
-                (n, e) for n, e in entries if all(t in e.tags for t in tags)
-            ]
+            entries = [(n, e) for n, e in entries if all(t in e.tags for t in tags)]
 
         return entries
 
@@ -390,9 +390,7 @@ class SessionManager:
 
     # ── Private helpers ──
 
-    def _find_session_file(
-        self, uuid: str, project_dir: str = ""
-    ) -> Path | None:
+    def _find_session_file(self, uuid: str, project_dir: str = "") -> Path | None:
         """Locate a session .jsonl file by UUID."""
         base = _find_claude_projects_dir()
         if not base.is_dir():

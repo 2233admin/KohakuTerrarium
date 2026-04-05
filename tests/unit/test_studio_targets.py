@@ -22,7 +22,6 @@ from kohakuterrarium.studio.targets.gemini import GeminiTarget
 from kohakuterrarium.studio.targets.openclaw import OpenClawTarget
 from kohakuterrarium.studio.targets.aider import AiderTarget
 
-
 # -- Registry tests --
 
 
@@ -125,11 +124,7 @@ class TestClaudeCodeTarget:
     def test_merge_settings_hooks_append(self):
         """hooks extend, not replace."""
         target = ClaudeCodeTarget()
-        base = {
-            "hooks": {
-                "PreToolUse": [{"type": "command", "command": "echo base"}]
-            }
-        }
+        base = {"hooks": {"PreToolUse": [{"type": "command", "command": "echo base"}]}}
         profile = ProfileConfig(
             hooks={"PreToolUse": [HookEntry(command="echo profile", event="Bash")]}
         )
@@ -464,7 +459,14 @@ class TestRegistryCount:
         """list_targets() returns all 6 registered targets."""
         targets = list_targets()
         names = {t.name for t in targets}
-        assert names == {"claude-code", "copilot", "codex", "gemini", "openclaw", "aider"}
+        assert names == {
+            "claude-code",
+            "copilot",
+            "codex",
+            "gemini",
+            "openclaw",
+            "aider",
+        }
         assert len(targets) == 6
 
 

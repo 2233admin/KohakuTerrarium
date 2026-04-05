@@ -207,8 +207,10 @@ def handle_studio_command(args: argparse.Namespace) -> int:
         case "copilot":
             return _handle_copilot_subcommand(args)
         case _:
-            print("Usage: kt studio {init,launch,apply,profiles,profile,doctor,"
-                  "sessions,session,statusline,theme,targets,target,copilot}")
+            print(
+                "Usage: kt studio {init,launch,apply,profiles,profile,doctor,"
+                "sessions,session,statusline,theme,targets,target,copilot}"
+            )
             return 0
 
 
@@ -311,8 +313,12 @@ def _handle_profile_subcommand(args: argparse.Namespace) -> int:
     match getattr(args, "profile_action", None):
         case "create":
             try:
-                p = create_profile(args.name, model=args.model, effort=args.effort, theme=args.theme)
-                print(f"Created profile '{args.name}' (model={p.model}, effort={p.effort})")
+                p = create_profile(
+                    args.name, model=args.model, effort=args.effort, theme=args.theme
+                )
+                print(
+                    f"Created profile '{args.name}' (model={p.model}, effort={p.effort})"
+                )
                 return 0
             except ValueError as e:
                 print(f"Error: {e}")
@@ -332,7 +338,9 @@ def _handle_profile_subcommand(args: argparse.Namespace) -> int:
             if p.hooks:
                 print(f"Hooks:   {len(p.hooks)} event(s)")
             if p.statusline:
-                print(f"Status:  {p.statusline.style} ({', '.join(p.statusline.segments)})")
+                print(
+                    f"Status:  {p.statusline.style} ({', '.join(p.statusline.segments)})"
+                )
             if p.permissions:
                 print(f"Perms:   {p.permissions}")
             if p.append_system_prompt_file:
@@ -368,8 +376,6 @@ def _handle_doctor() -> int:
     if not issues:
         print("All good. Studio is healthy.")
         return 0
-
-    print(f"Found {len(issues)} issue(s):")
     for issue in issues:
         print(f"  - {issue}")
     return 1
@@ -377,9 +383,7 @@ def _handle_doctor() -> int:
 
 def _handle_sessions_list() -> int:
     """List all named sessions."""
-    manager = SessionManager()
-    entries = manager.list_sessions()
-
+    entries = SessionManager().list_sessions()
     if not entries:
         print("No named sessions. Use: kt studio session name <uuid|latest> <name>")
         return 0
@@ -458,11 +462,12 @@ def _handle_session_subcommand(args: argparse.Namespace) -> int:
 
 def _resolve_statusline_config() -> tuple[StatuslineConfig, str | None]:
     """Load active profile's statusline config and theme name."""
-    config = load_studio_config()
-    profile = config.profiles.get(config.active_profile) if config.active_profile else None
-    sl = profile.statusline if profile and profile.statusline else StatuslineConfig()
-    theme = profile.theme if profile else None
-    return sl, theme
+    cfg = load_studio_config()
+    p = cfg.profiles.get(cfg.active_profile) if cfg.active_profile else None
+    return (
+        p.statusline or StatuslineConfig() if p else StatuslineConfig(),
+        p.theme if p else None,
+    )
 
 
 def _handle_statusline_subcommand(args: argparse.Namespace) -> int:
@@ -472,7 +477,9 @@ def _handle_statusline_subcommand(args: argparse.Namespace) -> int:
             sl_config, theme_name = _resolve_statusline_config()
             builder = StatusLineBuilder(sl_config, theme_name=theme_name)
             builder.install()
-            print(f"Statusline installed (style={sl_config.style}, segments={sl_config.segments})")
+            print(
+                f"Statusline installed (style={sl_config.style}, segments={sl_config.segments})"
+            )
             return 0
         case "preview":
             sl_config, _ = _resolve_statusline_config()

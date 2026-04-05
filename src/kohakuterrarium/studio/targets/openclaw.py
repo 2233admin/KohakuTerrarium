@@ -44,8 +44,7 @@ class OpenClawTarget(Target):
     ) -> list[str]:
         """OpenClaw is a server, not a CLI."""
         raise NotImplementedError(
-            "OpenClaw is a server, not a CLI. "
-            "Use the dashboard or API directly."
+            "OpenClaw is a server, not a CLI. " "Use the dashboard or API directly."
         )
 
     def list_models(self) -> list[str]:
