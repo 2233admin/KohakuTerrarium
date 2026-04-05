@@ -29,6 +29,10 @@ from kohakuterrarium.session.resume import (
     resume_terrarium,
 )
 from kohakuterrarium.session.store import SessionStore
+from kohakuterrarium.studio.cli import (
+    add_studio_subparser,
+    handle_studio_command,
+)
 from kohakuterrarium.terrarium.cli import (
     add_terrarium_subparser,
     handle_terrarium_command,
@@ -97,6 +101,9 @@ def main() -> int:
 
     # Terrarium command group
     add_terrarium_subparser(subparsers)
+
+    # Studio command group
+    add_studio_subparser(subparsers)
 
     # Resume command
     resume_parser = subparsers.add_parser(
@@ -237,6 +244,8 @@ def main() -> int:
         return list_cli(args.path)
     elif args.command == "info":
         return show_agent_info_cli(args.agent_path)
+    elif args.command == "studio":
+        return handle_studio_command(args)
     elif args.command == "terrarium":
         # Resolve @package references in terrarium path
         if hasattr(args, "terrarium_path") and args.terrarium_path:
