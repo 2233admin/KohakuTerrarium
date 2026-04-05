@@ -86,7 +86,7 @@ embeddings = [
     "sentence-transformers>=4.0.0",
 ]
 all = [
-    "KohakuTerrarium[api,dev,web,embeddings-light]",
+    "KohakuTerrarium[api,dev,web,browser,embeddings,embeddings-light]",
 ]
 
 [tool.setuptools]
