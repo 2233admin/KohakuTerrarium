@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"npx tweakcc status 2>&1\",\"description\":\"Check tweakcc status\"}",
+  "error": "Exit code 1\nerror: too many arguments. Expected 0 arguments but got 1.",
+  "timestamp": "2026-04-05T13:58:41.894Z",
+  "retry_count": 1
+}

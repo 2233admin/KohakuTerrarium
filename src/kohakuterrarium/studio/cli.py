@@ -145,9 +145,7 @@ def add_studio_subparser(subparsers: argparse._SubParsersAction) -> None:
 
     # studio cost [--period today|week|month]
     cost_p = studio_sub.add_parser("cost", help="Show API cost summary")
-    cost_p.add_argument(
-        "--period", default="today", choices=["today", "week", "month"]
-    )
+    cost_p.add_argument("--period", default="today", choices=["today", "week", "month"])
 
     # studio record [--target X] [--output file.jsonl]
     record_p = studio_sub.add_parser("record", help="Record a CLI session as JSONL")
@@ -170,7 +168,9 @@ def add_studio_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
 
     # studio completion bash|zsh|fish|powershell
-    comp_p = studio_sub.add_parser("completion", help="Generate shell completion script")
+    comp_p = studio_sub.add_parser(
+        "completion", help="Generate shell completion script"
+    )
     comp_p.add_argument("shell", choices=["bash", "zsh", "fish", "powershell"])
 
     # studio diff <profile-a> <profile-b>

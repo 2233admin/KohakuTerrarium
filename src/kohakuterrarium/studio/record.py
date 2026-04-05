@@ -52,11 +52,13 @@ class SessionRecorder:
             meta = RecordingEntry(
                 timestamp=start_ts,
                 type="meta",
-                content=json.dumps({
-                    "target": self.target_name,
-                    "command": command,
-                    "event": "start",
-                }),
+                content=json.dumps(
+                    {
+                        "target": self.target_name,
+                        "command": command,
+                        "event": "start",
+                    }
+                ),
             )
             f.write(json.dumps(meta.to_dict()) + "\n")
 
@@ -69,7 +71,9 @@ class SessionRecorder:
             async for line_bytes in proc.stdout:
                 line = line_bytes.decode("utf-8", errors="replace")
                 ts = datetime.now(timezone.utc).isoformat()
-                entry = RecordingEntry(timestamp=ts, type="output", content=line.rstrip("\n"))
+                entry = RecordingEntry(
+                    timestamp=ts, type="output", content=line.rstrip("\n")
+                )
                 f.write(json.dumps(entry.to_dict()) + "\n")
                 sys.stdout.write(line)
                 sys.stdout.flush()
@@ -81,11 +85,13 @@ class SessionRecorder:
             end_meta = RecordingEntry(
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 type="meta",
-                content=json.dumps({
-                    "event": "end",
-                    "duration_ms": elapsed_ms,
-                    "exit_code": proc.returncode,
-                }),
+                content=json.dumps(
+                    {
+                        "event": "end",
+                        "duration_ms": elapsed_ms,
+                        "exit_code": proc.returncode,
+                    }
+                ),
             )
             f.write(json.dumps(end_meta.to_dict()) + "\n")
 

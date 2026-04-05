@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # -- cost.py tests --
 
 
@@ -83,7 +82,10 @@ class TestRecord:
         mock_proc.wait = AsyncMock(return_value=0)
         mock_proc.returncode = 0
 
-        with patch("kohakuterrarium.studio.record.asyncio.create_subprocess_exec", return_value=mock_proc):
+        with patch(
+            "kohakuterrarium.studio.record.asyncio.create_subprocess_exec",
+            return_value=mock_proc,
+        ):
             exit_code = asyncio.run(recorder.record(["echo", "test"]))
 
         assert exit_code == 0
@@ -101,7 +103,9 @@ class TestCompare:
     def test_compare_result_dataclass(self):
         from kohakuterrarium.studio.compare import CompareResult
 
-        r = CompareResult(target="claude-code", output="ok", duration_ms=150, exit_code=0)
+        r = CompareResult(
+            target="claude-code", output="ok", duration_ms=150, exit_code=0
+        )
         assert r.target == "claude-code"
         assert r.duration_ms == 150
 
@@ -135,10 +139,12 @@ class TestCompare:
         mock_target = MagicMock()
         mock_target.build_command.return_value = ["echo", "test"]
 
-        with patch(
-            "kohakuterrarium.studio.compare.resolve_target", return_value=mock_target
-        ), patch(
-            "asyncio.create_subprocess_exec", return_value=mock_proc
+        with (
+            patch(
+                "kohakuterrarium.studio.compare.resolve_target",
+                return_value=mock_target,
+            ),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
         ):
             runner = CompareRunner(["claude-code", "codex"])
             results = asyncio.run(runner.run("test task", timeout=10))
@@ -183,19 +189,25 @@ class TestCompletion:
 
 class TestDiff:
     def test_diff_profiles_identical(self, tmp_path: Path):
-        from kohakuterrarium.studio.config import ProfileConfig, StudioConfig, save_studio_config
+        from kohakuterrarium.studio.config import (
+            ProfileConfig,
+            StudioConfig,
+            save_studio_config,
+        )
         from kohakuterrarium.studio.profiles import diff_profiles
 
-        cfg = StudioConfig(
-            profiles={"a": ProfileConfig(), "b": ProfileConfig()}
-        )
+        cfg = StudioConfig(profiles={"a": ProfileConfig(), "b": ProfileConfig()})
         cp = tmp_path / "studio.yaml"
         save_studio_config(cfg, cp)
         result = diff_profiles("a", "b", config_path=cp)
         assert result == {}
 
     def test_diff_profiles_different_model(self, tmp_path: Path):
-        from kohakuterrarium.studio.config import ProfileConfig, StudioConfig, save_studio_config
+        from kohakuterrarium.studio.config import (
+            ProfileConfig,
+            StudioConfig,
+            save_studio_config,
+        )
         from kohakuterrarium.studio.profiles import diff_profiles
 
         cfg = StudioConfig(
@@ -210,7 +222,11 @@ class TestDiff:
         assert result == {"model": ("sonnet", "opus")}
 
     def test_diff_profiles_missing_profile(self, tmp_path: Path):
-        from kohakuterrarium.studio.config import ProfileConfig, StudioConfig, save_studio_config
+        from kohakuterrarium.studio.config import (
+            ProfileConfig,
+            StudioConfig,
+            save_studio_config,
+        )
         from kohakuterrarium.studio.profiles import diff_profiles
 
         cfg = StudioConfig(profiles={"a": ProfileConfig()})

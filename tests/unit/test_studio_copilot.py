@@ -18,7 +18,6 @@ from kohakuterrarium.studio.copilot import (
     COPILOT_MODEL_ENV,
 )
 
-
 # -- find / version --
 
 
@@ -41,12 +40,15 @@ class TestGetCopilotVersion:
         mock_result = MagicMock()
         mock_result.stdout = "1.2.3\n"
         mock_result.returncode = 0
-        with patch(
-            "kohakuterrarium.studio.copilot.find_copilot_cli",
-            return_value=Path("/usr/bin/github-copilot-cli"),
-        ), patch(
-            "kohakuterrarium.studio.copilot.subprocess.run",
-            return_value=mock_result,
+        with (
+            patch(
+                "kohakuterrarium.studio.copilot.find_copilot_cli",
+                return_value=Path("/usr/bin/github-copilot-cli"),
+            ),
+            patch(
+                "kohakuterrarium.studio.copilot.subprocess.run",
+                return_value=mock_result,
+            ),
         ):
             assert get_copilot_version() == "1.2.3"
 
@@ -128,27 +130,33 @@ class TestGetCurrentModel:
 
 class TestCopilotStatus:
     def test_not_installed(self):
-        with patch(
-            "kohakuterrarium.studio.copilot.find_copilot_cli", return_value=None
-        ), patch(
-            "kohakuterrarium.studio.copilot.get_copilot_version", return_value=None
-        ), patch(
-            "kohakuterrarium.studio.copilot.get_current_model", return_value=None
+        with (
+            patch("kohakuterrarium.studio.copilot.find_copilot_cli", return_value=None),
+            patch(
+                "kohakuterrarium.studio.copilot.get_copilot_version", return_value=None
+            ),
+            patch(
+                "kohakuterrarium.studio.copilot.get_current_model", return_value=None
+            ),
         ):
             info = copilot_status()
             assert info["installed"] is False
             assert info["version"] is None
 
     def test_installed(self):
-        with patch(
-            "kohakuterrarium.studio.copilot.find_copilot_cli",
-            return_value=Path("/usr/bin/github-copilot-cli"),
-        ), patch(
-            "kohakuterrarium.studio.copilot.get_copilot_version",
-            return_value="1.2.3",
-        ), patch(
-            "kohakuterrarium.studio.copilot.get_current_model",
-            return_value="gpt-4o",
+        with (
+            patch(
+                "kohakuterrarium.studio.copilot.find_copilot_cli",
+                return_value=Path("/usr/bin/github-copilot-cli"),
+            ),
+            patch(
+                "kohakuterrarium.studio.copilot.get_copilot_version",
+                return_value="1.2.3",
+            ),
+            patch(
+                "kohakuterrarium.studio.copilot.get_current_model",
+                return_value="gpt-4o",
+            ),
         ):
             info = copilot_status()
             assert info["installed"] is True
@@ -162,22 +170,24 @@ class TestCopilotStatus:
 class TestPatchDriver:
     def test_no_node(self):
         driver = PatchDriver()
-        with patch(
-            "kohakuterrarium.studio.copilot.shutil.which", return_value=None
-        ):
+        with patch("kohakuterrarium.studio.copilot.shutil.which", return_value=None):
             result = driver.apply_patch()
             assert result is False
 
     def test_graceful_failure(self):
         driver = PatchDriver()
-        with patch(
-            "kohakuterrarium.studio.copilot.shutil.which",
-            return_value="/usr/bin/node",
-        ), patch(
-            "kohakuterrarium.studio.copilot.subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "node"),
-        ), patch.object(
-            driver, "detect_install", return_value=Path("/fake/bundle.js")
+        with (
+            patch(
+                "kohakuterrarium.studio.copilot.shutil.which",
+                return_value="/usr/bin/node",
+            ),
+            patch(
+                "kohakuterrarium.studio.copilot.subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, "node"),
+            ),
+            patch.object(
+                driver, "detect_install", return_value=Path("/fake/bundle.js")
+            ),
         ):
             result = driver.apply_patch()
             assert result is False

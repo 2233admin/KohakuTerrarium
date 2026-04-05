@@ -63,9 +63,7 @@ def list_profiles(
     return sorted(config.profiles.items(), key=lambda x: x[0])
 
 
-def show_profile(
-    name: str, config_path: Path | None = None
-) -> ProfileConfig | None:
+def show_profile(name: str, config_path: Path | None = None) -> ProfileConfig | None:
     """Show a single profile by name. Returns None if not found."""
     config = load_studio_config(config_path)
     return config.profiles.get(name)

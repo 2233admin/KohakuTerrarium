@@ -124,9 +124,7 @@ class TestSegments:
 
     def test_session_from_env(self):
         fn = SEGMENT_REGISTRY["session"]
-        with patch.dict(
-            os.environ, {"CLAUDE_SESSION_ID": "abcdef1234567890"}
-        ):
+        with patch.dict(os.environ, {"CLAUDE_SESSION_ID": "abcdef1234567890"}):
             result = fn()
         assert result == "abcdef12"
 
@@ -199,9 +197,7 @@ class TestStatusLineBuilder:
         runner_dir = tmp_path / "studio"
         runner_dir.mkdir()
 
-        with patch(
-            "kohakuterrarium.studio.statusline.KT_DIR", tmp_path
-        ):
+        with patch("kohakuterrarium.studio.statusline.KT_DIR", tmp_path):
             builder.install(settings_path=settings_path)
 
         data = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -222,9 +218,7 @@ class TestStatusLineBuilder:
         runner_file = runner_dir / "statusline_runner.py"
         runner_file.write_text("# dummy", encoding="utf-8")
 
-        with patch(
-            "kohakuterrarium.studio.statusline.KT_DIR", tmp_path
-        ):
+        with patch("kohakuterrarium.studio.statusline.KT_DIR", tmp_path):
             builder.uninstall(settings_path=settings_path)
 
         data = json.loads(settings_path.read_text(encoding="utf-8"))

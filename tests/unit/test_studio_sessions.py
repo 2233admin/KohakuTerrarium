@@ -20,7 +20,6 @@ from kohakuterrarium.studio.sessions import (
     _session_to_markdown,
 )
 
-
 # ── Fixtures ──
 
 
@@ -57,9 +56,7 @@ def mock_claude_dir(tmp_path: Path) -> Path:
         {"role": "assistant", "content": "Hi there"},
         {"role": "user", "content": "Fix the bug"},
     ]
-    session_file.write_text(
-        "\n".join(json.dumps(t) for t in turns), encoding="utf-8"
-    )
+    session_file.write_text("\n".join(json.dumps(t) for t in turns), encoding="utf-8")
 
     # Second session file for scan tests
     session_file2 = proj_dir / "other-uuid-5678.jsonl"

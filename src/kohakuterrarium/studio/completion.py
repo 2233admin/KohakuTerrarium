@@ -15,7 +15,7 @@ STUDIO_SUBCOMMANDS = (
 
 def generate_bash_completion() -> str:
     """Generate bash completion script for kt studio."""
-    return f'''\
+    return f"""\
 # bash completion for kt studio
 # Add to ~/.bashrc: eval "$(kt studio completion bash)"
 
@@ -73,12 +73,12 @@ _kt_studio_completions() {{
 }}
 
 complete -F _kt_studio_completions kt
-'''
+"""
 
 
 def generate_zsh_completion() -> str:
     """Generate zsh completion script for kt studio."""
-    return f'''\
+    return f"""\
 #compdef kt
 
 # zsh completion for kt studio
@@ -104,7 +104,7 @@ _kt_studio() {{
 }}
 
 compdef _kt_studio kt
-'''
+"""
 
 
 def generate_fish_completion() -> str:
@@ -156,7 +156,7 @@ def generate_powershell_completion() -> str:
     """Generate PowerShell completion script for kt studio."""
     subcmds = STUDIO_SUBCOMMANDS.split()
     subcmd_list = ", ".join(f"'{s}'" for s in subcmds)
-    return f'''\
+    return f"""\
 # PowerShell completion for kt studio
 # Add to $PROFILE: . (kt studio completion powershell)
 
@@ -169,7 +169,7 @@ Register-ArgumentCompleter -CommandName kt -ScriptBlock {{
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }}
 }}
-'''
+"""
 
 
 def handle_completion_command(args: argparse.Namespace) -> int:

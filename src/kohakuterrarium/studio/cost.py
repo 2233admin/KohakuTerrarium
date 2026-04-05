@@ -31,7 +31,9 @@ def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     if rates is None:
         return 0.0
     input_rate, output_rate = rates
-    return (input_tokens / 1_000_000) * input_rate + (output_tokens / 1_000_000) * output_rate
+    return (input_tokens / 1_000_000) * input_rate + (
+        output_tokens / 1_000_000
+    ) * output_rate
 
 
 def scan_usage_logs() -> list[dict]:
@@ -62,14 +64,16 @@ def scan_usage_logs() -> list[dict]:
                     model = data.get("model", "unknown")
                     inp = usage.get("input_tokens", 0)
                     out = usage.get("output_tokens", 0)
-                    entries.append({
-                        "target": data.get("target", "claude-code"),
-                        "model": model,
-                        "input_tokens": inp,
-                        "output_tokens": out,
-                        "cost": estimate_cost(model, inp, out),
-                        "timestamp": data.get("timestamp", ""),
-                    })
+                    entries.append(
+                        {
+                            "target": data.get("target", "claude-code"),
+                            "model": model,
+                            "input_tokens": inp,
+                            "output_tokens": out,
+                            "cost": estimate_cost(model, inp, out),
+                            "timestamp": data.get("timestamp", ""),
+                        }
+                    )
         except OSError:
             continue
 

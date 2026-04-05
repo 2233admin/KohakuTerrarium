@@ -29,7 +29,9 @@ class CompareRunner:
     def __init__(self, targets: list[str]) -> None:
         self.targets = targets
 
-    async def _run_one(self, target_name: str, task: str, timeout: int) -> CompareResult:
+    async def _run_one(
+        self, target_name: str, task: str, timeout: int
+    ) -> CompareResult:
         """Run task on a single target."""
         try:
             target = resolve_target(target_name)
@@ -93,7 +95,9 @@ class CompareRunner:
     def format_results(self, results: list[CompareResult]) -> str:
         """Format results as an aligned table."""
         lines: list[str] = []
-        lines.append(f"{'Target':<20} {'Duration':<12} {'Exit':<6} {'Output (first 200 chars)'}")
+        lines.append(
+            f"{'Target':<20} {'Duration':<12} {'Exit':<6} {'Output (first 200 chars)'}"
+        )
         lines.append("-" * 70)
         for r in results:
             preview = r.output.replace("\n", " ")[:200]

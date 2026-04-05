@@ -25,7 +25,6 @@ from kohakuterrarium.studio.profiles import (
     show_profile,
 )
 
-
 # ── Config dataclass defaults ──
 
 
@@ -222,9 +221,7 @@ from kohakuterrarium.studio.launcher import ProfileLauncher, doctor, find_claude
 
 
 class TestProfileLauncher:
-    def _make_launcher(
-        self, profile: ProfileConfig | None = None
-    ) -> ProfileLauncher:
+    def _make_launcher(self, profile: ProfileConfig | None = None) -> ProfileLauncher:
         if profile is None:
             profile = ProfileConfig()
         return ProfileLauncher(profile, StudioConfig())
@@ -260,11 +257,7 @@ class TestProfileLauncher:
 
     def test_build_settings_json_hooks_append(self, tmp_path: Path):
         """Base has PreToolUse hooks, profile adds more -> both present."""
-        base = {
-            "hooks": {
-                "PreToolUse": [{"type": "command", "command": "echo base"}]
-            }
-        }
+        base = {"hooks": {"PreToolUse": [{"type": "command", "command": "echo base"}]}}
         settings_path = tmp_path / "settings.json"
         settings_path.write_text(json.dumps(base))
 
@@ -353,11 +346,12 @@ class TestStudioCLI:
     def test_studio_init_creates_config(self, tmp_path: Path):
         """Init creates studio.yaml."""
         config_path = tmp_path / "studio.yaml"
-        with patch(
-            "kohakuterrarium.studio.handlers.STUDIO_CONFIG_PATH", config_path
-        ), patch(
-            "kohakuterrarium.studio.handlers.save_studio_config",
-            wraps=lambda c, p=None: save_studio_config(c, config_path),
+        with (
+            patch("kohakuterrarium.studio.handlers.STUDIO_CONFIG_PATH", config_path),
+            patch(
+                "kohakuterrarium.studio.handlers.save_studio_config",
+                wraps=lambda c, p=None: save_studio_config(c, config_path),
+            ),
         ):
             args = argparse.Namespace(studio_command="init")
             result = handle_studio_command(args)

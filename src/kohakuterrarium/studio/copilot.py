@@ -197,8 +197,19 @@ class PatchDriver:
         cli_dir = cli.resolve().parent
         # Common patterns for npm global installs
         candidates = [
-            cli_dir / "node_modules" / "@githubnext" / "copilot-cli" / "dist" / "index.js",
-            cli_dir / ".." / "lib" / "node_modules" / "github-copilot-cli" / "dist" / "index.js",
+            cli_dir
+            / "node_modules"
+            / "@githubnext"
+            / "copilot-cli"
+            / "dist"
+            / "index.js",
+            cli_dir
+            / ".."
+            / "lib"
+            / "node_modules"
+            / "github-copilot-cli"
+            / "dist"
+            / "index.js",
         ]
         for candidate in candidates:
             resolved = candidate.resolve()
@@ -251,7 +262,11 @@ class PatchDriver:
             )
             logger.info("Copilot patch applied to %s", bundle)
             return True
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        except (
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            OSError,
+        ) as exc:
             logger.warning("Copilot patch failed: %s", exc)
             return False
 
