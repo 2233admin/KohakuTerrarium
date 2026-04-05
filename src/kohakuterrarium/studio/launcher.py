@@ -13,6 +13,7 @@ from kohakuterrarium.studio.config import (
     StudioConfig,
     load_studio_config,
 )
+from kohakuterrarium.studio.targets import resolve_target
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -26,10 +27,11 @@ class ProfileLauncher:
     def __init__(self, profile: ProfileConfig, studio_config: StudioConfig) -> None:
         self.profile = profile
         self.studio_config = studio_config
+        self.target = resolve_target(profile.target)
         self._temp_files: list[Path] = []
 
     def build_settings_json(self) -> dict[str, Any]:
-        """Build merged settings dict from base ~/.claude/settings.json + profile overrides."""
+        """Build merged settings dict from base settings + profile overrides."""
         base: dict[str, Any] = {}
         if CLAUDE_SETTINGS_PATH.exists():
             try:
@@ -37,73 +39,11 @@ class ProfileLauncher:
                     base = json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning("Failed to read base settings: %s", e)
-
-        profile = self.profile
-
-        # env: dict merge, profile wins
-        if profile.env:
-            base_env = base.get("env", {})
-            base["env"] = base_env | profile.env
-
-        # hooks: extend lists per event key
-        if profile.hooks:
-            base_hooks: dict[str, list] = base.get("hooks", {})
-            for event_name, entries in profile.hooks.items():
-                existing = base_hooks.get(event_name, [])
-                for entry in entries:
-                    hook_dict: dict[str, str] = {
-                        "type": "command",
-                        "command": entry.command,
-                    }
-                    if entry.event:
-                        hook_dict["matcher"] = entry.event
-                    existing.append(hook_dict)
-                base_hooks[event_name] = existing
-            base["hooks"] = base_hooks
-
-        # permissions: shallow merge, profile wins
-        if profile.permissions:
-            base_perms = base.get("permissions", {})
-            base["permissions"] = base_perms | profile.permissions
-
-        # statusline -> userStatusBar
-        if profile.statusline:
-            base["userStatusBar"] = {
-                "segments": profile.statusline.segments,
-                "style": profile.statusline.style,
-            }
-
-        # append system prompt file
-        if profile.append_system_prompt_file:
-            base["appendSystemPromptFile"] = profile.append_system_prompt_file
-
-        # mcp config
-        if profile.mcp_config:
-            mcp_path = Path(profile.mcp_config).expanduser()
-            if mcp_path.exists():
-                try:
-                    with open(mcp_path, encoding="utf-8") as f:
-                        mcp_data = json.load(f)
-                    base_mcp = base.get("mcpServers", {})
-                    base["mcpServers"] = base_mcp | mcp_data
-                except (json.JSONDecodeError, OSError) as e:
-                    logger.warning("Failed to read MCP config: %s", e)
-
-        # plugin dirs
-        if profile.plugin_dirs:
-            base["pluginDirs"] = profile.plugin_dirs
-
-        return base
+        return self.target.merge_settings(base, self.profile)
 
     def build_command(self, temp_settings_path: Path) -> list[str]:
-        """Build the claude CLI command with settings and profile flags."""
-        cmd = ["claude"]
-        cmd.extend(["--settings", str(temp_settings_path)])
-        if self.profile.model:
-            cmd.extend(["--model", self.profile.model])
-        if self.profile.effort:
-            cmd.extend(["--effort", self.profile.effort])
-        return cmd
+        """Build CLI command by delegating to the resolved target."""
+        return self.target.build_command(self.profile, temp_settings_path)
 
     async def launch(self) -> int:
         """Write merged settings to temp file and launch claude CLI."""

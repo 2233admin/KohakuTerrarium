@@ -49,7 +49,7 @@ class ClaudeCodeTarget(Target):
     def merge_settings(
         self, base: dict[str, Any], profile: ProfileConfig
     ) -> dict[str, Any]:
-        """Load ~/.claude/settings.json and apply profile overrides.
+        """Apply profile overrides to base settings dict.
 
         Merge semantics:
         - env: dict merge, profile wins
@@ -60,13 +60,7 @@ class ClaudeCodeTarget(Target):
         - mcp_config -> mcpServers (merge from JSON file)
         - plugin_dirs -> pluginDirs
         """
-        merged: dict[str, Any] = {}
-        if CLAUDE_SETTINGS_PATH.exists():
-            try:
-                with open(CLAUDE_SETTINGS_PATH, encoding="utf-8") as f:
-                    merged = json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
-                logger.warning("Failed to read base settings: %s", e)
+        merged = dict(base)
 
         # env: dict merge, profile wins
         if profile.env:

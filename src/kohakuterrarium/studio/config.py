@@ -45,6 +45,7 @@ class ProfileConfig:
     append_system_prompt_file: str | None = None
     mcp_config: str | None = None
     plugin_dirs: list[str] = field(default_factory=list)
+    target: str = "claude-code"
 
 
 @dataclass
@@ -56,6 +57,7 @@ class SessionEntry:
     created: str = ""
     tags: list[str] = field(default_factory=list)
     notes: str = ""
+    target: str = "claude-code"
 
 
 @dataclass
@@ -105,6 +107,7 @@ def _dict_to_profile(d: dict) -> ProfileConfig:
         append_system_prompt_file=d.get("append_system_prompt_file"),
         mcp_config=d.get("mcp_config"),
         plugin_dirs=d.get("plugin_dirs", []),
+        target=d.get("target", "claude-code"),
     )
 
 
@@ -139,6 +142,7 @@ def load_studio_config(path: Path | None = None) -> StudioConfig:
                 created=session_dict.get("created", ""),
                 tags=session_dict.get("tags", []),
                 notes=session_dict.get("notes", ""),
+                target=session_dict.get("target", "claude-code"),
             )
 
     return StudioConfig(
@@ -207,4 +211,6 @@ def _profile_to_dict(profile: ProfileConfig) -> dict:
         d["mcp_config"] = profile.mcp_config
     if profile.plugin_dirs:
         d["plugin_dirs"] = profile.plugin_dirs
+    if profile.target != "claude-code":
+        d["target"] = profile.target
     return d
