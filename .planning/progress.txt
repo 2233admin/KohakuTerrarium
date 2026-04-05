@@ -1,0 +1,18 @@
+# kt studio progress
+
+## What done
+- Phase 1-5 全部完成: kt studio 从 6 个独立 CLI 工具缝合成 KohakuTerrarium 的 AI 编码工具生态瓶
+- 19 个命令, 187 tests, ~3400 行, 6 targets (claude-code/codex/gemini/copilot/openclaw/aider)
+- Target 抽象层, 跨工具 session 聚合, 成本追踪, session 录制, 多工具对比, shell 补全, profile diff
+- KT 已有 915 tests 无回归
+
+## What blocked
+- 7 个 KT pre-existing test failures (test_bootstrap, test_memory, test_packages, test_phase8, test_web_tools) 不是我们的
+- compare/record 只有 mock 测试，没跑过真 CLI
+- OpenClaw target 的 /v1/models 解析是 stub
+
+## Next step
+- 独立包路线: 拆成 kohaku-studio 独立包 (去 KT 耦合, 自己的 pyproject.toml + CLI entry point)
+- 或 KT 内开发路线: 写 docs/studio.md, 开 issue 给 KohakuBlueLeaf, 做 CliCreatureAdapter 深度集成
+- 实测: kt studio launch default 真正启动 Claude Code 验证
+- CI: 配 GitHub Actions (pytest + ruff, Python 3.10-3.13 matrix)
