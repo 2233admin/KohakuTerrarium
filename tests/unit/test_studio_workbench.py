@@ -74,14 +74,16 @@ class TestRecord:
         out = tmp_path / "session.jsonl"
         recorder = SessionRecorder(out, "claude-code")
 
+        async def _mock_stdout():
+            for chunk in [b"line1\n", b"line2\n"]:
+                yield chunk
+
         mock_proc = AsyncMock()
-        mock_proc.stdout.__aiter__ = AsyncMock(
-            return_value=iter([b"line1\n", b"line2\n"])
-        )
+        mock_proc.stdout = _mock_stdout()
         mock_proc.wait = AsyncMock(return_value=0)
         mock_proc.returncode = 0
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+        with patch("kohakuterrarium.studio.record.asyncio.create_subprocess_exec", return_value=mock_proc):
             exit_code = asyncio.run(recorder.record(["echo", "test"]))
 
         assert exit_code == 0
