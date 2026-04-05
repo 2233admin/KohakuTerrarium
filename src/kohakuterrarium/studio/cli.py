@@ -20,6 +20,12 @@ from kohakuterrarium.studio.profiles import (
     list_profiles,
     show_profile,
 )
+from kohakuterrarium.studio.copilot import (
+    PatchDriver,
+    copilot_status,
+    list_available_models,
+    set_model,
+)
 from kohakuterrarium.studio.sessions import SessionManager
 from kohakuterrarium.studio.statusline import StatusLineBuilder
 from kohakuterrarium.studio.themes import (
@@ -149,6 +155,16 @@ def add_studio_subparser(subparsers: argparse._SubParsersAction) -> None:
     apply_theme_p.add_argument("name", help="Theme name")
     apply_theme_p.add_argument("--profile", default=None, help="Target profile")
 
+    # studio copilot {status,model,models,patch,unpatch}
+    copilot_p = studio_sub.add_parser("copilot", help="Manage Copilot CLI")
+    copilot_sub = copilot_p.add_subparsers(dest="copilot_action")
+    copilot_sub.add_parser("status", help="Show Copilot CLI status")
+    model_p = copilot_sub.add_parser("model", help="Set active model")
+    model_p.add_argument("name", help="Model identifier")
+    copilot_sub.add_parser("models", help="List available models")
+    copilot_sub.add_parser("patch", help="Apply AST patch for extended models")
+    copilot_sub.add_parser("unpatch", help="Restore original Copilot CLI")
+
 
 def handle_studio_command(args: argparse.Namespace) -> int:
     """Dispatch studio subcommand."""
@@ -173,10 +189,12 @@ def handle_studio_command(args: argparse.Namespace) -> int:
             return _handle_statusline_subcommand(args)
         case "theme":
             return _handle_theme_subcommand(args)
+        case "copilot":
+            return _handle_copilot_subcommand(args)
         case _:
             print(
                 "Usage: kt studio"
-                " {init,launch,apply,profiles,profile,doctor,sessions,session,statusline,theme}"
+                " {init,launch,apply,profiles,profile,doctor,sessions,session,statusline,theme,copilot}"
             )
             return 0
 
@@ -514,4 +532,52 @@ def _handle_theme_subcommand(args: argparse.Namespace) -> int:
             return 0
         case _:
             print("Usage: kt studio theme {list,show,apply}")
+            return 0
+
+
+def _handle_copilot_subcommand(args: argparse.Namespace) -> int:
+    """Dispatch copilot sub-subcommand."""
+    match getattr(args, "copilot_action", None):
+        case "status":
+            info = copilot_status()
+            print(f"Installed:  {info['installed']}")
+            print(f"Version:    {info['version'] or 'N/A'}")
+            print(f"Model:      {info['model'] or 'default'}")
+            print(f"Config:     {info['config_path'] or 'N/A'}")
+            driver = PatchDriver()
+            print(f"Patched:    {driver.is_patched()}")
+            return 0
+        case "model":
+            name = args.name
+            known = list_available_models()
+            if name not in known:
+                print(f"Warning: '{name}' not in known models. Setting anyway.")
+            set_model(name)
+            print(f"Model set to: {name}")
+            return 0
+        case "models":
+            for m in list_available_models():
+                print(f"  {m}")
+            return 0
+        case "patch":
+            driver = PatchDriver()
+            if driver.is_patched():
+                print("Already patched. Use 'unpatch' first to re-apply.")
+                return 0
+            ok = driver.apply_patch()
+            if ok:
+                print("Patch applied successfully.")
+            else:
+                print("Patch failed. Check logs for details.")
+            return 0 if ok else 1
+        case "unpatch":
+            driver = PatchDriver()
+            if not driver.is_patched():
+                print("Not patched. Nothing to restore.")
+                return 0
+            ok = driver.unpatch()
+            print("Restored." if ok else "Restore failed.")
+            return 0 if ok else 1
+        case _:
+            print("Usage: kt studio copilot {status,model,models,patch,unpatch}")
             return 0
