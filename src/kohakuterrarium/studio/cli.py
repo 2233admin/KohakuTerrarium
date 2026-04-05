@@ -28,6 +28,7 @@ from kohakuterrarium.studio.copilot import (
     set_model,
 )
 from kohakuterrarium.studio.sessions import SessionManager
+from kohakuterrarium.studio.targets import list_targets as _list_targets, resolve_target
 from kohakuterrarium.studio.statusline import StatusLineBuilder
 from kohakuterrarium.studio.themes import (
     get_theme,
@@ -156,6 +157,15 @@ def add_studio_subparser(subparsers: argparse._SubParsersAction) -> None:
     apply_theme_p.add_argument("name", help="Theme name")
     apply_theme_p.add_argument("--profile", default=None, help="Target profile")
 
+    # studio targets (list all targets with install status)
+    studio_sub.add_parser("targets", help="List all AI coding tool targets")
+
+    # studio target <name> status
+    target_p = studio_sub.add_parser("target", help="Manage a specific target")
+    target_sub = target_p.add_subparsers(dest="target_action")
+    target_status_p = target_sub.add_parser("status", help="Show target status")
+    target_status_p.add_argument("name", help="Target name")
+
     # studio copilot {status,model,models,patch,unpatch}
     copilot_p = studio_sub.add_parser("copilot", help="Manage Copilot CLI")
     copilot_sub = copilot_p.add_subparsers(dest="copilot_action")
@@ -190,13 +200,15 @@ def handle_studio_command(args: argparse.Namespace) -> int:
             return _handle_statusline_subcommand(args)
         case "theme":
             return _handle_theme_subcommand(args)
+        case "targets":
+            return _handle_targets_list()
+        case "target":
+            return _handle_target_subcommand(args)
         case "copilot":
             return _handle_copilot_subcommand(args)
         case _:
-            print(
-                "Usage: kt studio"
-                " {init,launch,apply,profiles,profile,doctor,sessions,session,statusline,theme,copilot}"
-            )
+            print("Usage: kt studio {init,launch,apply,profiles,profile,doctor,"
+                  "sessions,session,statusline,theme,targets,target,copilot}")
             return 0
 
 
@@ -286,7 +298,6 @@ def _handle_profiles() -> int:
     if not entries:
         print("No profiles defined. Use: kt studio profile create <name>")
         return 0
-
     print(f"{'Name':<20} {'Model':<15} {'Effort':<10} {'Active'}")
     print("-" * 55)
     for name, profile in entries:
@@ -300,15 +311,8 @@ def _handle_profile_subcommand(args: argparse.Namespace) -> int:
     match getattr(args, "profile_action", None):
         case "create":
             try:
-                p = create_profile(
-                    args.name,
-                    model=args.model,
-                    effort=args.effort,
-                    theme=args.theme,
-                )
-                print(
-                    f"Created profile '{args.name}' (model={p.model}, effort={p.effort})"
-                )
+                p = create_profile(args.name, model=args.model, effort=args.effort, theme=args.theme)
+                print(f"Created profile '{args.name}' (model={p.model}, effort={p.effort})")
                 return 0
             except ValueError as e:
                 print(f"Error: {e}")
@@ -328,9 +332,7 @@ def _handle_profile_subcommand(args: argparse.Namespace) -> int:
             if p.hooks:
                 print(f"Hooks:   {len(p.hooks)} event(s)")
             if p.statusline:
-                print(
-                    f"Status:  {p.statusline.style} ({', '.join(p.statusline.segments)})"
-                )
+                print(f"Status:  {p.statusline.style} ({', '.join(p.statusline.segments)})")
             if p.permissions:
                 print(f"Perms:   {p.permissions}")
             if p.append_system_prompt_file:
@@ -381,16 +383,13 @@ def _handle_sessions_list() -> int:
     if not entries:
         print("No named sessions. Use: kt studio session name <uuid|latest> <name>")
         return 0
-
     print(f"{'Name':<20} {'UUID':<10} {'Project Dir':<25} {'Created':<22} {'Tags'}")
     print("-" * 90)
     for name, entry in entries:
-        uuid_short = entry.uuid[:8] if entry.uuid else ""
-        tags_str = ", ".join(entry.tags) if entry.tags else ""
-        created_short = entry.created[:19] if entry.created else ""
-        print(
-            f"{name:<20} {uuid_short:<10} {entry.project_dir:<25} {created_short:<22} {tags_str}"
-        )
+        uid = entry.uuid[:8] if entry.uuid else ""
+        tags = ", ".join(entry.tags) if entry.tags else ""
+        created = entry.created[:19] if entry.created else ""
+        print(f"{name:<20} {uid:<10} {entry.project_dir:<25} {created:<22} {tags}")
     return 0
 
 
@@ -457,40 +456,30 @@ def _handle_session_subcommand(args: argparse.Namespace) -> int:
             return 0
 
 
+def _resolve_statusline_config() -> tuple[StatuslineConfig, str | None]:
+    """Load active profile's statusline config and theme name."""
+    config = load_studio_config()
+    profile = config.profiles.get(config.active_profile) if config.active_profile else None
+    sl = profile.statusline if profile and profile.statusline else StatuslineConfig()
+    theme = profile.theme if profile else None
+    return sl, theme
+
+
 def _handle_statusline_subcommand(args: argparse.Namespace) -> int:
     """Dispatch statusline sub-subcommand."""
     match getattr(args, "statusline_action", None):
         case "install":
-            config = load_studio_config()
-            profile_name = config.active_profile
-            profile = config.profiles.get(profile_name) if profile_name else None
-            sl_config = (
-                profile.statusline
-                if profile and profile.statusline
-                else StatuslineConfig()
-            )
-            theme_name = profile.theme if profile else None
+            sl_config, theme_name = _resolve_statusline_config()
             builder = StatusLineBuilder(sl_config, theme_name=theme_name)
             builder.install()
-            print(
-                f"Statusline installed (style={sl_config.style}, segments={sl_config.segments})"
-            )
+            print(f"Statusline installed (style={sl_config.style}, segments={sl_config.segments})")
             return 0
         case "preview":
-            config = load_studio_config()
-            profile_name = config.active_profile
-            profile = config.profiles.get(profile_name) if profile_name else None
-            sl_config = (
-                profile.statusline
-                if profile and profile.statusline
-                else StatuslineConfig()
-            )
-            builder = StatusLineBuilder(sl_config)
-            print(builder.preview())
+            sl_config, _ = _resolve_statusline_config()
+            print(StatusLineBuilder(sl_config).preview())
             return 0
         case "uninstall":
-            builder = StatusLineBuilder(StatuslineConfig())
-            builder.uninstall()
+            StatusLineBuilder(StatuslineConfig()).uninstall()
             print("Statusline uninstalled")
             return 0
         case _:
@@ -536,25 +525,46 @@ def _handle_theme_subcommand(args: argparse.Namespace) -> int:
             return 0
 
 
+def _handle_targets_list() -> int:
+    """List all registered targets with install status."""
+    print(f"{'Name':<15} {'Display':<20} {'Status':<15} {'Path/Endpoint'}")
+    print("-" * 65)
+    for t in _list_targets():
+        d = t.detect()
+        s = "installed" if d else "not-installed"
+        print(f"{t.name:<15} {t.display_name:<20} {s:<15} {str(d) if d else ''}")
+    return 0
+
+
+def _handle_target_subcommand(args: argparse.Namespace) -> int:
+    """Dispatch target sub-subcommand."""
+    if getattr(args, "target_action", None) != "status":
+        print("Usage: kt studio target status <name>")
+        return 0
+    try:
+        t = resolve_target(args.name)
+    except ValueError as e:
+        print(f"Error: {e}")
+        return 1
+    for key, value in t.status().items():
+        print(f"{key:<15} {value}")
+    return 0
+
+
 def _handle_copilot_subcommand(args: argparse.Namespace) -> int:
     """Dispatch copilot sub-subcommand."""
     match getattr(args, "copilot_action", None):
         case "status":
             info = copilot_status()
-            print(f"Installed:  {info['installed']}")
-            print(f"Version:    {info['version'] or 'N/A'}")
-            print(f"Model:      {info['model'] or 'default'}")
-            print(f"Config:     {info['config_path'] or 'N/A'}")
-            driver = PatchDriver()
-            print(f"Patched:    {driver.is_patched()}")
+            for k in ("installed", "version", "model", "config_path"):
+                print(f"{k:<12} {info.get(k) or 'N/A'}")
+            print(f"{'patched':<12} {PatchDriver().is_patched()}")
             return 0
         case "model":
-            name = args.name
-            known = list_available_models()
-            if name not in known:
-                print(f"Warning: '{name}' not in known models. Setting anyway.")
-            set_model(name)
-            print(f"Model set to: {name}")
+            if args.name not in list_available_models():
+                print(f"Warning: '{args.name}' not in known models. Setting anyway.")
+            set_model(args.name)
+            print(f"Model set to: {args.name}")
             return 0
         case "models":
             for m in list_available_models():
@@ -566,10 +576,7 @@ def _handle_copilot_subcommand(args: argparse.Namespace) -> int:
                 print("Already patched. Use 'unpatch' first to re-apply.")
                 return 0
             ok = driver.apply_patch()
-            if ok:
-                print("Patch applied successfully.")
-            else:
-                print("Patch failed. Check logs for details.")
+            print("Patch applied successfully." if ok else "Patch failed. Check logs.")
             return 0 if ok else 1
         case "unpatch":
             driver = PatchDriver()

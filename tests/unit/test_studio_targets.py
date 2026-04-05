@@ -466,3 +466,63 @@ class TestRegistryCount:
         names = {t.name for t in targets}
         assert names == {"claude-code", "copilot", "codex", "gemini", "openclaw", "aider"}
         assert len(targets) == 6
+
+
+# -- Cross-tool session aggregation tests --
+
+
+class TestScanAllSessions:
+    def test_scan_all_sessions_aggregates(self):
+        """scan_all_sessions aggregates from installed targets with 'target' field."""
+        from kohakuterrarium.studio.sessions import scan_all_sessions
+
+        mock_sessions_a = [{"uuid": "aaa", "modified": "2026-01-01T00:00:00Z"}]
+        mock_sessions_b = [{"uuid": "bbb", "modified": "2026-01-02T00:00:00Z"}]
+
+        target_a = MagicMock()
+        target_a.name = "tool-a"
+        target_a.detect.return_value = Path("/bin/a")
+        target_a.scan_sessions.return_value = mock_sessions_a
+
+        target_b = MagicMock()
+        target_b.name = "tool-b"
+        target_b.detect.return_value = Path("/bin/b")
+        target_b.scan_sessions.return_value = mock_sessions_b
+
+        with patch(
+            "kohakuterrarium.studio.targets.list_targets",
+            return_value=[target_a, target_b],
+        ):
+            result = scan_all_sessions()
+
+        assert len(result) == 2
+        # sorted by modified desc -- bbb first
+        assert result[0]["uuid"] == "bbb"
+        assert result[0]["target"] == "tool-b"
+        assert result[1]["uuid"] == "aaa"
+        assert result[1]["target"] == "tool-a"
+
+    def test_scan_all_sessions_skips_uninstalled(self):
+        """scan_all_sessions skips targets where detect() returns None."""
+        from kohakuterrarium.studio.sessions import scan_all_sessions
+
+        target_installed = MagicMock()
+        target_installed.name = "installed"
+        target_installed.detect.return_value = Path("/bin/inst")
+        target_installed.scan_sessions.return_value = [
+            {"uuid": "xxx", "modified": "2026-01-01T00:00:00Z"}
+        ]
+
+        target_missing = MagicMock()
+        target_missing.name = "missing"
+        target_missing.detect.return_value = None
+
+        with patch(
+            "kohakuterrarium.studio.targets.list_targets",
+            return_value=[target_installed, target_missing],
+        ):
+            result = scan_all_sessions()
+
+        assert len(result) == 1
+        assert result[0]["target"] == "installed"
+        target_missing.scan_sessions.assert_not_called()

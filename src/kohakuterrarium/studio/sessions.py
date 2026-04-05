@@ -154,6 +154,30 @@ def _session_to_html(turns: list[dict], name: str) -> str:
     return "\n".join(parts)
 
 
+def scan_all_sessions() -> list[dict]:
+    """Aggregate sessions from all installed targets.
+
+    Scans each target that is detected as installed, collects sessions,
+    tags each with the target name, and returns sorted by modified desc.
+    """
+    from kohakuterrarium.studio.targets import list_targets
+
+    all_sessions: list[dict] = []
+    for target in list_targets():
+        if target.detect() is None:
+            continue
+        try:
+            sessions = target.scan_sessions()
+            for s in sessions:
+                s.setdefault("target", target.name)
+            all_sessions.extend(sessions)
+        except Exception:
+            logger.debug("Failed to scan sessions for %s", target.name)
+
+    all_sessions.sort(key=lambda s: s.get("modified", ""), reverse=True)
+    return all_sessions
+
+
 class SessionManager:
     """Manages named Claude Code sessions -- CRUD, resume, fork, export."""
 
