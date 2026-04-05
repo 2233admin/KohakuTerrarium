@@ -8,6 +8,7 @@ from pathlib import Path
 from kohakuterrarium.studio.config import (
     STUDIO_CONFIG_PATH,
     ProfileConfig,
+    StatuslineConfig,
     StudioConfig,
     load_studio_config,
     save_studio_config,
