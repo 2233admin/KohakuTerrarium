@@ -315,18 +315,34 @@ def _merge_configs(base_data: dict[str, Any], child_data: dict[str, Any]) -> dic
     - Dicts (controller, input, output): shallow-merged (child keys override)
     - Scalars: child overrides base
     - system_prompt_file: tracked separately for append behavior
+
+    Special directive ``no_inherit`` (list of key names) makes specified
+    extend-keys use REPLACE instead of EXTEND, so only the child's entries
+    are kept.  Example::
+
+        no_inherit: [tools, subagents]
+        tools:
+          - { name: think, type: builtin }
     """
     # Keys whose lists should be extended, not replaced
     _EXTEND_KEYS = {"tools", "subagents"}
+    # Keys the child explicitly opts out of inheriting
+    _NO_INHERIT = set(child_data.get("no_inherit", []))
 
     result = dict(base_data)
+
+    # Track inline system_prompt from child so prompt chain can append it
+    if "system_prompt" in child_data and child_data["system_prompt"] is not None:
+        result["_inline_system_prompt"] = child_data["system_prompt"]
+
     for key, value in child_data.items():
-        if key == "base_config":
-            continue  # Don't propagate base_config into merged result
+        if key in ("base_config", "no_inherit"):
+            continue  # Metadata, don't propagate
         if value is None:
             continue  # Only override if child explicitly sets a value
         if (
             key in _EXTEND_KEYS
+            and key not in _NO_INHERIT
             and isinstance(value, list)
             and key in result
             and isinstance(result[key], list)
@@ -621,10 +637,18 @@ def _construct_agent_config(
 def _load_prompt_chain(config: AgentConfig, config_data: dict[str, Any]) -> None:
     """Load system prompt from the file chain (base prompts + child prompt).
 
-    Mutates config.system_prompt in place if prompt files are found.
+    Mutates config.system_prompt in place.  Sources are combined in order:
+
+    1. File-based prompts from the inheritance chain (``_prompt_chain``)
+    2. The child's own ``system_prompt_file`` (if not already in chain)
+    3. An inline ``system_prompt`` set by the child config
+       (tracked as ``_inline_system_prompt`` during merge)
+
+    All present sources are joined with double newlines.
     """
     base_path = config_data.get("_base_path")
     prompt_chain: list[str] = config_data.get("_prompt_chain", [])
+    inline_prompt: str | None = config_data.get("_inline_system_prompt")
     prompt_parts: list[str] = []
 
     # Load all base prompt files from the inheritance chain
@@ -648,6 +672,11 @@ def _load_prompt_chain(config: AgentConfig, config_data: dict[str, Any]) -> None
                 with open(prompt_path, encoding="utf-8") as f:
                     prompt_parts.append(f.read())
                 logger.debug("Loaded child prompt", path=str(prompt_path))
+
+    # Append inline system_prompt from child (e.g. terrarium creature override)
+    if inline_prompt:
+        prompt_parts.append(inline_prompt)
+        logger.debug("Appended inline system_prompt to chain")
 
     if prompt_parts:
         config.system_prompt = "\n\n".join(prompt_parts)
