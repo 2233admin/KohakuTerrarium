@@ -95,7 +95,7 @@
                   <ChatPanel :instance="instance" />
                 </template>
                 <template #second>
-                  <EditorStatus />
+                  <EditorStatus :instance="instance" />
                 </template>
               </SplitPane>
             </template>

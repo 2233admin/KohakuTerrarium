@@ -8,7 +8,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from kohakuterrarium.core.config import load_agent_config
-from kohakuterrarium.packages import PACKAGES_DIR, install_package, uninstall_package
+from kohakuterrarium.packages import (
+    install_package,
+    list_packages,
+    uninstall_package,
+)
 from kohakuterrarium.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -103,49 +107,56 @@ def _parse_terrarium_detail(config_dir: Path) -> dict | None:
 
 
 def _scan_all_configs() -> list[dict]:
-    """Scan all known creatures and terrariums directories for configs."""
+    """Scan all known creatures and terrariums directories for configs.
+
+    Uses list_packages() which handles both direct dirs and .link (editable) installs.
+    Also scans local project directories (cwd/creatures, cwd/terrariums).
+    """
     results: list[dict] = []
+    seen_paths: set[str] = set()
+
+    def _add_creature(config_dir: Path, source: str = "") -> None:
+        key = str(config_dir.resolve())
+        if key in seen_paths:
+            return
+        seen_paths.add(key)
+        detail = _parse_creature_detail(config_dir)
+        if detail:
+            detail["source"] = source
+            results.append(detail)
+
+    def _add_terrarium(config_dir: Path, source: str = "") -> None:
+        key = str(config_dir.resolve())
+        if key in seen_paths:
+            return
+        seen_paths.add(key)
+        detail = _parse_terrarium_detail(config_dir)
+        if detail:
+            detail["source"] = source
+            results.append(detail)
+
+    # Scan installed packages (handles .link editable installs)
+    for pkg in list_packages():
+        pkg_path = Path(pkg["path"])
+        pkg_name = pkg["name"]
+        for c in pkg.get("creatures", []):
+            _add_creature(pkg_path / c["path"], source=pkg_name)
+        for t in pkg.get("terrariums", []):
+            _add_terrarium(pkg_path / t["path"], source=pkg_name)
 
     # Scan local project directories
     cwd = Path.cwd()
     for creatures_dir in [cwd / "creatures"]:
-        if not creatures_dir.is_dir():
-            continue
-        for child in sorted(creatures_dir.iterdir()):
-            if not child.is_dir():
-                continue
-            detail = _parse_creature_detail(child)
-            if detail:
-                results.append(detail)
+        if creatures_dir.is_dir():
+            for child in sorted(creatures_dir.iterdir()):
+                if child.is_dir():
+                    _add_creature(child, source="local")
 
     for terrariums_dir in [cwd / "terrariums"]:
-        if not terrariums_dir.is_dir():
-            continue
-        for child in sorted(terrariums_dir.iterdir()):
-            if not child.is_dir():
-                continue
-            detail = _parse_terrarium_detail(child)
-            if detail:
-                results.append(detail)
-
-    # Scan installed packages
-    if PACKAGES_DIR.exists():
-        for pkg_entry in sorted(PACKAGES_DIR.iterdir()):
-            if not pkg_entry.is_dir():
-                continue
-            for sub in ["creatures", "terrariums"]:
-                sub_dir = pkg_entry / sub
-                if not sub_dir.is_dir():
-                    continue
-                for child in sorted(sub_dir.iterdir()):
-                    if not child.is_dir():
-                        continue
-                    if sub == "creatures":
-                        detail = _parse_creature_detail(child)
-                    else:
-                        detail = _parse_terrarium_detail(child)
-                    if detail:
-                        results.append(detail)
+        if terrariums_dir.is_dir():
+            for child in sorted(terrariums_dir.iterdir()):
+                if child.is_dir():
+                    _add_terrarium(child, source="local")
 
     return results
 

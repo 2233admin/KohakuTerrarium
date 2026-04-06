@@ -145,6 +145,11 @@ class AgentSession:
             except Exception:
                 pass
 
+        # Working directory from executor
+        pwd = ""
+        if hasattr(self.agent, "executor") and self.agent.executor:
+            pwd = str(self.agent.executor._working_dir)
+
         return {
             "agent_id": self.agent_id,
             "name": self.agent.config.name,
@@ -156,4 +161,5 @@ class AgentSession:
             "running": self._running and self.agent.is_running,
             "tools": self.agent.tools,
             "subagents": self.agent.subagents,
+            "pwd": pwd,
         }

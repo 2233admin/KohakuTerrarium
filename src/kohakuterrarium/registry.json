@@ -3,16 +3,9 @@
     {
       "name": "kohaku-creatures",
       "url": "https://github.com/Kohaku-Lab/kohaku-creatures.git",
-      "type": "creature",
-      "description": "Official creature configs for KohakuTerrarium (SWE agent, chat bot, etc.)",
-      "tags": ["official", "swe", "chat"]
-    },
-    {
-      "name": "kohaku-terrariums",
-      "url": "https://github.com/Kohaku-Lab/kohaku-terrariums.git",
-      "type": "terrarium",
-      "description": "Official terrarium templates for multi-agent setups",
-      "tags": ["official", "multi-agent"]
+      "type": "package",
+      "description": "Official creatures and terrariums for KohakuTerrarium (SWE agent, chat bot, reviewer, swe_team, etc.)",
+      "tags": ["official", "swe", "chat", "multi-agent"]
     }
   ]
 }
