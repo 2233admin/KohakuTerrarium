@@ -136,6 +136,7 @@ def build_root_agent(
         session=root_session,
         environment=root_env,
         llm_override=kwargs.get("llm_override"),
+        pwd=kwargs.get("pwd"),
     )
 
     # Force-add all terrarium tools regardless of creature config
@@ -293,6 +294,7 @@ def build_creature(
         session=creature_session,
         environment=environment,
         llm_override=kwargs.get("llm_override"),
+        pwd=kwargs.get("pwd"),
     )
 
     # -- Inject ChannelTriggers for listen channels --

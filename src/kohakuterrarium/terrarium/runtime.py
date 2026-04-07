@@ -41,9 +41,11 @@ class TerrariumRuntime(HotPlugMixin):
         *,
         environment: Environment | None = None,
         llm_override: str | None = None,
+        pwd: str | None = None,
     ):
         self.config = config
         self.llm_override = llm_override
+        self.pwd = pwd
         # Use provided environment or create one
         self.environment = environment or Environment(
             env_id=f"terrarium_{config.name}_{uuid4().hex[:8]}"
@@ -144,6 +146,7 @@ class TerrariumRuntime(HotPlugMixin):
                 self.environment,
                 self.config,
                 llm_override=self.llm_override,
+                pwd=self.pwd,
             )
             self._creatures[creature_cfg.name] = handle
 
@@ -160,6 +163,7 @@ class TerrariumRuntime(HotPlugMixin):
                 self.environment,
                 self,
                 llm_override=self.llm_override,
+                pwd=self.pwd,
             )
             logger.info(
                 "Root agent built",

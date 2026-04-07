@@ -286,7 +286,7 @@ class KohakuManager:
 
         terrarium_id = f"terrarium_{uuid4().hex[:8]}"
         env = Environment(env_id=f"terrarium_{cfg.name}_{uuid4().hex[:8]}")
-        runtime = TerrariumRuntime(cfg, environment=env)
+        runtime = TerrariumRuntime(cfg, environment=env, pwd=pwd)
         self._terrariums[terrarium_id] = runtime
 
         # Prepare session store before run (auto-attached after start inside run)
