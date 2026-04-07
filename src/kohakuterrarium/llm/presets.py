@@ -159,7 +159,10 @@ PRESETS: dict[str, dict[str, Any]] = {
         "base_url": "https://openrouter.ai/api/v1",
         "api_key_env": "OPENROUTER_API_KEY",
         "max_context": 1000000,
-        "extra_body": {"reasoning": {"enabled": True}},
+        "extra_body": {
+            "reasoning": {"enabled": True},
+            "cache_control": {"type": "ephemeral"},
+        },
     },
     "claude-sonnet-4.6": {
         "provider": "openai",
@@ -167,7 +170,10 @@ PRESETS: dict[str, dict[str, Any]] = {
         "base_url": "https://openrouter.ai/api/v1",
         "api_key_env": "OPENROUTER_API_KEY",
         "max_context": 1000000,
-        "extra_body": {"reasoning": {"enabled": True}},
+        "extra_body": {
+            "reasoning": {"enabled": True},
+            "cache_control": {"type": "ephemeral"},
+        },
     },
     "claude-sonnet-4.5": {
         "provider": "openai",
@@ -175,7 +181,10 @@ PRESETS: dict[str, dict[str, Any]] = {
         "base_url": "https://openrouter.ai/api/v1",
         "api_key_env": "OPENROUTER_API_KEY",
         "max_context": 1000000,
-        "extra_body": {"reasoning": {"enabled": True}},
+        "extra_body": {
+            "reasoning": {"enabled": True},
+            "cache_control": {"type": "ephemeral"},
+        },
     },
     "claude-haiku-4.5": {
         "provider": "openai",
@@ -183,6 +192,9 @@ PRESETS: dict[str, dict[str, Any]] = {
         "base_url": "https://openrouter.ai/api/v1",
         "api_key_env": "OPENROUTER_API_KEY",
         "max_context": 200000,
+        "extra_body": {
+            "cache_control": {"type": "ephemeral"},
+        },
     },
     # Legacy aliases kept for backward compat
     "claude-sonnet-4": {
