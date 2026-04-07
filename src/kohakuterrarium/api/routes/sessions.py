@@ -1,5 +1,6 @@
 """Session management routes. List saved sessions and resume them."""
 
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -17,11 +18,18 @@ router = APIRouter()
 _SESSION_DIR = Path.home() / ".kohakuterrarium" / "sessions"
 
 
-@router.get("")
-async def list_sessions(limit: int = 20):
-    """List saved sessions, most recent first."""
+# In-memory session index (built once, refreshed on demand)
+_session_index: list[dict] = []
+_index_built_at: float = 0
+
+
+def _build_session_index() -> list[dict]:
+    """Build index of all sessions. Cached in memory."""
+    global _session_index, _index_built_at
+
     if not _SESSION_DIR.exists():
-        return []
+        _session_index = []
+        return _session_index
 
     session_files = list(_SESSION_DIR.glob("*.kohakutr")) + list(
         _SESSION_DIR.glob("*.kt")
@@ -46,7 +54,6 @@ async def list_sessions(limit: int = 20):
             except Exception:
                 pass
 
-            # Close without updating status/timestamp (read-only access)
             store.close(update_status=False)
 
             results.append(
@@ -67,13 +74,66 @@ async def list_sessions(limit: int = 20):
         except Exception:
             results.append({"name": path.stem, "filename": path.name, "error": True})
 
-    # Sort by last_active (from metadata), fallback to created_at, then filename
-    def _sort_key(s):
-        ts = s.get("last_active") or s.get("created_at") or ""
-        return ts
+    results.sort(
+        key=lambda s: s.get("last_active") or s.get("created_at") or "",
+        reverse=True,
+    )
 
-    results.sort(key=_sort_key, reverse=True)
-    return results[:limit]
+    _session_index = results
+    _index_built_at = time.time()
+    return results
+
+
+def _get_session_index(max_age: float = 30.0) -> list[dict]:
+    """Get cached session index, rebuild if stale."""
+    if time.time() - _index_built_at > max_age:
+        return _build_session_index()
+    return _session_index
+
+
+@router.get("")
+async def list_sessions(
+    limit: int = 20,
+    offset: int = 0,
+    search: str = "",
+    refresh: bool = False,
+):
+    """List saved sessions with search and pagination.
+
+    Args:
+        limit: Max sessions to return (default 20)
+        offset: Skip first N sessions (for pagination)
+        search: Filter by name, config, agents, preview (case-insensitive)
+        refresh: Force rebuild the session index
+    """
+    if refresh:
+        _build_session_index()
+
+    all_sessions = _get_session_index()
+
+    # Server-side search
+    if search:
+        q = search.lower()
+        all_sessions = [
+            s
+            for s in all_sessions
+            if q
+            in " ".join(
+                [
+                    s.get("name", ""),
+                    s.get("config_path", ""),
+                    s.get("config_type", ""),
+                    s.get("terrarium_name", ""),
+                    s.get("preview", ""),
+                    s.get("pwd", ""),
+                    " ".join(s.get("agents", [])),
+                ]
+            ).lower()
+        ]
+
+    total = len(all_sessions)
+    page = all_sessions[offset : offset + limit]
+    return {"sessions": page, "total": total, "offset": offset, "limit": limit}
 
 
 @router.delete("/{session_name}")

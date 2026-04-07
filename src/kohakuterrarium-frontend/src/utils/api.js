@@ -222,9 +222,11 @@ export const filesAPI = {
 
 /** Saved sessions */
 export const sessionAPI = {
-  /** @returns {Promise<object[]>} */
-  async list() {
-    const { data } = await api.get("/sessions");
+  async list({ limit = 20, offset = 0, search = "", refresh = false } = {}) {
+    const params = { limit, offset };
+    if (search) params.search = search;
+    if (refresh) params.refresh = true;
+    const { data } = await api.get("/sessions", { params });
     return data;
   },
 

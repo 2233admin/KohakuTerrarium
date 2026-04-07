@@ -58,13 +58,16 @@
           />
         </div>
 
-        <div v-if="filteredSessions.length === 0" class="card p-8 text-center text-secondary">
+        <div v-if="sessions.length === 0 && searchQuery" class="card p-8 text-center text-secondary">
           No sessions match "{{ searchQuery }}"
+        </div>
+        <div v-else-if="sessions.length === 0" class="card p-8 text-center text-secondary">
+          No sessions found
         </div>
 
         <div v-else class="flex flex-col gap-2">
           <div
-            v-for="session in filteredSessions"
+            v-for="session in sessions"
           :key="session.name"
           class="card-hover p-4 flex items-center gap-4"
         >
@@ -133,6 +136,30 @@
             </button>
           </div>
         </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4 text-xs text-warm-400">
+          <span>{{ totalSessions }} sessions total</span>
+          <div class="flex gap-2">
+            <button
+              class="btn-secondary"
+              :disabled="!hasPrev"
+              @click="prevPage"
+            >
+              <span class="i-carbon-chevron-left" /> Prev
+            </button>
+            <span class="py-1 px-2">
+              {{ currentOffset + 1 }}-{{ Math.min(currentOffset + pageSize, totalSessions) }}
+            </span>
+            <button
+              class="btn-secondary"
+              :disabled="!hasMore"
+              @click="nextPage"
+            >
+              Next <span class="i-carbon-chevron-right" />
+            </button>
+          </div>
+        </div>
         </div>
       </template>
     </div>
@@ -148,43 +175,53 @@ const router = useRouter();
 const instances = useInstancesStore();
 
 const sessions = ref([]);
+const totalSessions = ref(0);
+const currentOffset = ref(0);
+const pageSize = 20;
 const loading = ref(false);
 const error = ref(null);
 const resuming = ref(null);
 const searchQuery = ref("");
+let _searchTimer = null;
 
-const filteredSessions = computed(() => {
-  const sorted = [...sessions.value].sort((a, b) => {
-    const dateA = a.last_active ? new Date(a.last_active).getTime() : 0;
-    const dateB = b.last_active ? new Date(b.last_active).getTime() : 0;
-    return dateB - dateA;
-  });
-  const q = searchQuery.value.toLowerCase().trim();
-  if (!q) return sorted;
-  return sorted.filter((s) => {
-    const haystack = [
-      s.name,
-      s.config_path,
-      s.config_type,
-      s.terrarium_name,
-      s.preview,
-      s.pwd,
-      ...(s.agents || []),
-    ].join(" ").toLowerCase();
-    return haystack.includes(q);
-  });
+// Debounced server-side search
+watch(searchQuery, () => {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => {
+    currentOffset.value = 0;
+    fetchSessions();
+  }, 300);
 });
+
+const hasMore = computed(() => currentOffset.value + pageSize < totalSessions.value);
+const hasPrev = computed(() => currentOffset.value > 0);
 
 async function fetchSessions() {
   loading.value = true;
   error.value = null;
   try {
-    sessions.value = await sessionAPI.list();
+    const result = await sessionAPI.list({
+      limit: pageSize,
+      offset: currentOffset.value,
+      search: searchQuery.value.trim(),
+    });
+    sessions.value = result.sessions || [];
+    totalSessions.value = result.total || 0;
   } catch (err) {
     error.value = err.response?.data?.detail || err.message;
   } finally {
     loading.value = false;
   }
+}
+
+function nextPage() {
+  currentOffset.value += pageSize;
+  fetchSessions();
+}
+
+function prevPage() {
+  currentOffset.value = Math.max(0, currentOffset.value - pageSize);
+  fetchSessions();
 }
 
 async function resumeSession(session) {
@@ -207,8 +244,8 @@ async function deleteSession(session) {
   if (!confirm(`Delete session "${session.name}"?`)) return;
   try {
     await sessionAPI.delete(session.name);
-    sessions.value = sessions.value.filter((s) => s.name !== session.name);
     ElMessage.success("Session deleted");
+    await fetchSessions();
   } catch (err) {
     ElMessage.error(
       `Failed to delete: ${err.response?.data?.detail || err.message}`,
