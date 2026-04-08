@@ -173,6 +173,9 @@ class Controller:
         # Interrupt flag: checked during LLM streaming
         self._interrupted = False
 
+        # Plugin manager (set by agent after creation, None = no overhead)
+        self.plugins: Any = None
+
         # Job store (shared with executor if provided)
         if executor:
             self.job_store = executor.job_store

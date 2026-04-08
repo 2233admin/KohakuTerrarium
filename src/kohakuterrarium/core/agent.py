@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 from kohakuterrarium.core.agent_handlers import AgentHandlersMixin
 from kohakuterrarium.bootstrap.agent_init import AgentInitMixin
+from kohakuterrarium.bootstrap.llm import create_llm_from_profile_name
+from kohakuterrarium.bootstrap.plugins import init_plugins
 from kohakuterrarium.core.compact import CompactConfig, CompactManager
 from kohakuterrarium.core.config import AgentConfig, load_agent_config
 from kohakuterrarium.core.job import JobState
@@ -124,8 +126,8 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
         # Active backgroundify handles (for TUI/frontend promotion access)
         self._active_handles: dict[str, Any] = {}
 
-        # Auto-compact (initialized after controller is ready)
         self.compact_manager: Any = None
+        self.plugins: Any = None  # PluginManager | None
 
         # Environment and session (explicit or auto-created in _init_executor)
         self.environment: Environment | None = environment
@@ -188,12 +190,10 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
         await self.input.start()
         await self.output_router.start()
 
-        # Wire Escape key to agent.interrupt() for TUI mode
+        # Wire TUI callbacks (Escape → interrupt, click → cancel/promote)
         tui_input = getattr(self.input, "_tui", None)
         if tui_input and tui_input._app:
             tui_input._app.on_interrupt = self.interrupt
-
-        # Wire click-to-cancel and click-to-promote on TUI running panel
         if tui_input:
             tui_input.on_cancel_job = self._cancel_job
             tui_input.on_promote_job = self._promote_handle
@@ -209,6 +209,7 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
         await self._init_mcp()
 
         self._init_compact_manager()
+        self._init_plugins()
         self._publish_session_info()
 
         if self._termination_checker:
@@ -356,6 +357,14 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
             except (KeyError, TypeError, ValueError):
                 pass
 
+    def _init_plugins(self) -> None:
+        """Initialize plugins from config. No-op if none configured."""
+        if not getattr(self.config, "plugins", []):
+            return
+        self.plugins = init_plugins(self.config.plugins, self._loader)
+        if self.plugins:
+            self.controller.plugins = self.plugins
+
     def _publish_session_info(self) -> None:
         """Publish session info to output (for TUI session panel).
 
@@ -481,12 +490,7 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
             )
 
     def _promote_handle(self, job_id: str) -> bool:
-        """Promote a running direct task to background.
-
-        Called from TUI click handler (Textual thread) or frontend API
-        (asyncio event loop). Uses ``call_soon_threadsafe`` to ensure
-        the asyncio.Event inside the handle is set on the correct loop.
-        """
+        """Promote a direct task to background. Thread-safe (TUI + API)."""
         handle = self._active_handles.get(job_id)
         if not handle:
             return False
@@ -523,8 +527,6 @@ class Agent(AgentInitMixin, AgentHandlersMixin):
         Returns:
             The model identifier string of the new provider.
         """
-        from kohakuterrarium.bootstrap.llm import create_llm_from_profile_name
-
         new_llm = create_llm_from_profile_name(profile_name)
         self.llm = new_llm
         self.controller.llm = new_llm
