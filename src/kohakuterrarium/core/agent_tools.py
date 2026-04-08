@@ -114,17 +114,30 @@ class AgentToolsMixin:
                 )
             elif result is not None:
                 content = result.output if result.output else ""
-                status = "OK" if result.exit_code == 0 else f"exit={result.exit_code}"
+                exit_code = getattr(result, "exit_code", 0)
+                status = "OK" if exit_code == 0 else f"exit={exit_code}"
                 # For TUI display: extract text preview from multimodal content
                 preview = (
                     result.get_text_output()[:5000]
                     if hasattr(result, "get_text_output")
                     else str(content)[:5000]
                 )
+                # Sub-agent results: emit subagent_done with richer metadata
+                is_subagent = job_id.startswith("agent_")
+                activity = "subagent_done" if is_subagent else "tool_done"
+                meta: dict = {"job_id": job_id, "output": preview}
+                if is_subagent:
+                    meta["result"] = preview
+                    meta["turns"] = getattr(result, "turns", 0)
+                    meta["duration"] = getattr(result, "duration", 0)
+                    meta["total_tokens"] = getattr(result, "total_tokens", 0)
+                    meta["tools_used"] = getattr(result, "metadata", {}).get(
+                        "tools_used", []
+                    )
                 self.output_router.notify_activity(
-                    "tool_done",
+                    activity,
                     f"[{label}] {status}",
-                    metadata={"job_id": job_id, "output": preview},
+                    metadata=meta,
                 )
             else:
                 content = ""
@@ -186,8 +199,12 @@ class AgentToolsMixin:
     # Sub-agent execution
     # ------------------------------------------------------------------
 
-    async def _start_subagent_async(self, event: SubAgentCallEvent) -> str:
-        """Start a sub-agent execution. Returns job ID."""
+    async def _start_subagent_async(self, event: SubAgentCallEvent) -> tuple[str, bool]:
+        """Start a sub-agent execution.
+
+        Returns:
+            (job_id, is_background)
+        """
         logger.info(
             "Starting sub-agent",
             subagent_type=event.name,
@@ -199,7 +216,7 @@ class AgentToolsMixin:
             logger.error(
                 "Sub-agent not registered", subagent_name=event.name, error=str(e)
             )
-            return f"error_{event.name}"
+            return f"error_{event.name}", True
 
     # ------------------------------------------------------------------
     # Background job completion callback

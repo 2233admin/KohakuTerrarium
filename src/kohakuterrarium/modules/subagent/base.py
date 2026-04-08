@@ -303,6 +303,8 @@ class SubAgent:
         async for chunk in self.llm.chat(
             messages, stream=True, tools=tool_schemas or None
         ):
+            if self._cancelled:
+                break
             assistant_content += chunk
             if chunk:
                 output_parts.append(chunk)
@@ -355,6 +357,8 @@ class SubAgent:
         tool_calls: list[ToolCallEvent] = []
 
         async for chunk in self.llm.chat(messages, stream=True):
+            if self._cancelled:
+                break
             assistant_content += chunk
             for event in self._parser.feed(chunk):
                 if isinstance(event, ToolCallEvent):
@@ -584,7 +588,7 @@ class SubAgent:
         return 0.0
 
     def cancel(self) -> None:
-        """Request cancellation. The run loop will exit at the next check point."""
+        """Request cancellation. Checked during LLM streaming and between turns."""
         self._cancelled = True
         self._running = False
         logger.info("Sub-agent cancel requested", subagent_name=self.config.name)

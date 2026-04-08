@@ -273,7 +273,14 @@ class AgentHandlersMixin(AgentToolsMixin):
                     native_mode,
                 )
             elif isinstance(parse_event, SubAgentCallEvent):
-                await self._dispatch_subagent_event(parse_event, controller)
+                await self._dispatch_subagent_event(
+                    parse_event,
+                    controller,
+                    direct_tasks,
+                    direct_job_ids,
+                    native_tool_call_ids,
+                    native_mode,
+                )
             elif isinstance(parse_event, CommandResultEvent):
                 self._notify_command_result(parse_event)
             else:
@@ -340,31 +347,57 @@ class AgentHandlersMixin(AgentToolsMixin):
         self._notify_tool_start(parse_event, job_id, is_direct)
 
     async def _dispatch_subagent_event(
-        self, parse_event: SubAgentCallEvent, controller: Controller
+        self,
+        parse_event: SubAgentCallEvent,
+        controller: Controller,
+        direct_tasks: dict[str, asyncio.Task] | None = None,
+        direct_job_ids: list[str] | None = None,
+        native_tool_call_ids: dict[str, str] | None = None,
+        native_mode: bool = False,
     ) -> None:
-        """Handle a SubAgentCallEvent: start the sub-agent."""
-        sa_tool_call_id = parse_event.args.pop("_tool_call_id", None)
-        job_id = await self._start_subagent_async(parse_event)
+        """Handle a SubAgentCallEvent: start the sub-agent.
 
-        if sa_tool_call_id:
-            controller.conversation.append(
-                "tool",
-                f"[{parse_event.name}] Sub-agent is handling this task. "
-                "Do NOT do this same task yourself — the sub-agent is already doing it. "
-                "Do NOT use bash echo/sleep to wait — just end your response. "
-                "Work on a DIFFERENT task or STOP your response now. "
-                "Result arrives automatically in the next turn.",
-                tool_call_id=sa_tool_call_id,
-                name=parse_event.name,
-            )
+        If the sub-agent is direct (run_in_background=false), it is added
+        to direct_tasks/direct_job_ids just like a direct tool so the
+        controller loop waits for its result before the next LLM turn.
+        """
+        sa_tool_call_id = parse_event.args.pop("_tool_call_id", None)
+        full_task = parse_event.args.get("task", "")
+
+        job_id, is_background = await self._start_subagent_async(parse_event)
+
+        if is_background:
+            # Background: add placeholder so the model knows it's running
+            if sa_tool_call_id:
+                controller.conversation.append(
+                    "tool",
+                    f"[{parse_event.name}] Sub-agent is handling this task. "
+                    "Do NOT do this same task yourself — the sub-agent is already doing it. "
+                    "Do NOT use bash echo/sleep to wait — just end your response. "
+                    "Work on a DIFFERENT task or STOP your response now. "
+                    "Result arrives automatically in the next turn.",
+                    tool_call_id=sa_tool_call_id,
+                    name=parse_event.name,
+                )
+        else:
+            # Direct: add to direct_tasks so the loop gathers it
+            sa_task = self.subagent_manager._tasks.get(job_id)
+            if sa_task and direct_tasks is not None and direct_job_ids is not None:
+                direct_tasks[job_id] = sa_task
+                direct_job_ids.append(job_id)
+                if sa_tool_call_id and native_tool_call_ids is not None:
+                    native_tool_call_ids[job_id] = sa_tool_call_id
 
         await self._flush_output()
         _, label = _make_job_label(job_id)
-        full_task = parse_event.args.get("task", "")
         self.output_router.notify_activity(
             "subagent_start",
             f"[{label}] {full_task[:60]}",
-            metadata={"job_id": job_id, "task": full_task},
+            metadata={
+                "job_id": job_id,
+                "task": full_task,
+                "background": is_background,
+            },
         )
 
     def _notify_command_result(self, parse_event: CommandResultEvent) -> None:

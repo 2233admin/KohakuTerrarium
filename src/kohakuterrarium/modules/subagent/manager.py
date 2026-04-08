@@ -277,13 +277,13 @@ class SubAgentManager(InteractiveManagerMixin):
         )
         self.job_store.register(status)
 
-        if background:
-            # Start background task — result delivered via callback
-            task_obj = asyncio.create_task(self._run_subagent(job_id, job, task))
-            self._tasks[job_id] = task_obj
-        else:
-            # Run synchronously — block until complete
-            await self._run_subagent(job_id, job, task)
+        # Create asyncio task — caller decides whether to wait (direct) or not
+        task_obj = asyncio.create_task(self._run_subagent(job_id, job, task))
+        self._tasks[job_id] = task_obj
+
+        if not background:
+            # Programmatic API: wait for completion before returning
+            await task_obj
 
         logger.info(
             "Spawned sub-agent",
@@ -294,19 +294,20 @@ class SubAgentManager(InteractiveManagerMixin):
 
         return job_id
 
-    async def spawn_from_event(self, event: SubAgentCallEvent) -> str:
-        """
-        Spawn sub-agent from a parsed event.
+    async def spawn_from_event(self, event: SubAgentCallEvent) -> tuple[str, bool]:
+        """Spawn sub-agent from a parsed event.
 
-        Args:
-            event: Parsed sub-agent call event
+        Always starts the sub-agent as a background asyncio task so the
+        caller can decide whether to wait (direct) or not (background).
 
         Returns:
-            Job ID
+            (job_id, is_background) — is_background reflects the model's intent
         """
         task = event.args.get("task", event.args.get("content", ""))
-        background = event.args.pop("run_in_background", True)
-        return await self.spawn(event.name, task, background=background)
+        is_background = event.args.pop("run_in_background", True)
+        # Always spawn as background task — caller handles waiting for direct
+        job_id = await self.spawn(event.name, task, background=True)
+        return job_id, is_background
 
     async def _run_subagent(
         self,
