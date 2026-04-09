@@ -123,6 +123,18 @@ const props = defineProps({
 
 const layout = useLayoutStore();
 
+// ─── Narrow-window fallback ───────────────────────────────────
+// Below 900 px the shell auto-collapses side zones to keep just the
+// main zone + status bar usable. The user can still open other
+// panels via the command palette or the preset strip.
+const windowWidth = ref(
+  typeof window !== "undefined" ? window.innerWidth : 1600,
+);
+function onResize() {
+  if (typeof window !== "undefined") windowWidth.value = window.innerWidth;
+}
+const isNarrow = computed(() => windowWidth.value < 900);
+
 // Runtime panel props injected by the route. We read `chat` from the
 // map for the singleton ChatPanel so page owners can still pass e.g.
 // the current instance without going through the store.
@@ -165,6 +177,10 @@ const horizontalPanes = computed(() => {
   for (const { zoneId, type } of HORIZONTAL_ORDER) {
     const z = p.zones?.[zoneId];
     if (!z || z.visible === false) continue;
+    // Narrow window: hide sidebars + aux zones, keep main only. The
+    // main zone may still host chat or whichever panel the preset
+    // picked for it.
+    if (isNarrow.value && zoneId !== "main") continue;
     const slots = p.slots?.filter((s) => s.zoneId === zoneId) || [];
     if (slots.length === 0 && !props.showEmpty) continue;
     out.push({
@@ -273,10 +289,16 @@ onMounted(() => {
   unsubSaveAs = onLayoutEvent(LAYOUT_EVENTS.SAVE_AS_REQUESTED, () => {
     saveModalOpen.value = true;
   });
+  if (typeof window !== "undefined") {
+    window.addEventListener("resize", onResize);
+  }
 });
 
 onUnmounted(() => {
   unsubSaveAs();
+  if (typeof window !== "undefined") {
+    window.removeEventListener("resize", onResize);
+  }
 });
 </script>
 
