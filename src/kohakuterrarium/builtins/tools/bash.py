@@ -58,6 +58,8 @@ class ShellTool(BaseTool):
     Defaults to bash on all platforms (git bash on Windows).
     """
 
+    needs_context = True
+
     def __init__(self, config: ToolConfig | None = None):
         super().__init__(config)
 
@@ -92,8 +94,9 @@ class ShellTool(BaseTool):
             "required": ["command"],
         }
 
-    async def _execute(self, args: dict[str, Any]) -> ToolResult:
+    async def _execute(self, args: dict[str, Any], **kwargs: Any) -> ToolResult:
         """Execute the command."""
+        context = kwargs.get("context")
         command = args.get("command", "")
         if not command:
             return ToolResult(error="No command provided")
@@ -147,8 +150,11 @@ class ShellTool(BaseTool):
         if self.config.env:
             env.update(self.config.env)
 
-        # Set working directory
-        cwd = self.config.working_dir or os.getcwd()
+        # Set working directory: context (agent-aware) > tool config > process cwd
+        if context and getattr(context, "working_dir", None):
+            cwd = str(context.working_dir)
+        else:
+            cwd = self.config.working_dir or os.getcwd()
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -213,11 +219,9 @@ BashTool = ShellTool
 
 @register_builtin("python")
 class PythonTool(BaseTool):
-    """
-    Tool for executing Python code.
+    """Tool for executing Python code in a subprocess."""
 
-    Executes Python code in a subprocess.
-    """
+    needs_context = True
 
     @property
     def tool_name(self) -> str:
@@ -231,8 +235,9 @@ class PythonTool(BaseTool):
     def execution_mode(self) -> ExecutionMode:
         return ExecutionMode.DIRECT
 
-    async def _execute(self, args: dict[str, Any]) -> ToolResult:
+    async def _execute(self, args: dict[str, Any], **kwargs: Any) -> ToolResult:
         """Execute Python code."""
+        context = kwargs.get("context")
         code = args.get("code", "")
         if not code:
             return ToolResult(error="No code provided")
@@ -240,13 +245,17 @@ class PythonTool(BaseTool):
         logger.debug("Executing Python code", code_length=len(code))
 
         python_cmd = [sys.executable, "-c", code]
+        if context and getattr(context, "working_dir", None):
+            cwd = str(context.working_dir)
+        else:
+            cwd = self.config.working_dir or os.getcwd()
 
         try:
             process = await asyncio.create_subprocess_exec(
                 *python_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
-                cwd=self.config.working_dir or os.getcwd(),
+                cwd=cwd,
             )
 
             try:
