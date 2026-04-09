@@ -16,6 +16,7 @@ import ActivityPanel from "@/components/panels/ActivityPanel.vue";
 import CanvasPanel from "@/components/panels/CanvasPanel.vue";
 import CreaturesPanel from "@/components/panels/CreaturesPanel.vue";
 import FilesPanel from "@/components/panels/FilesPanel.vue";
+import SettingsPanel from "@/components/panels/SettingsPanel.vue";
 import StatePanel from "@/components/panels/StatePanel.vue";
 import StatusDashboard from "@/components/status/StatusDashboard.vue";
 
@@ -303,6 +304,15 @@ export function registerBuiltinPanels() {
     label: "Canvas",
     component: CanvasPanel,
     preferredZones: ["main", "right-aux"],
+    orientation: "tall-wide",
+    supportsDetach: true,
+  });
+
+  layout.registerPanel({
+    id: "settings",
+    label: "Settings",
+    component: SettingsPanel,
+    preferredZones: ["main"],
     orientation: "tall-wide",
     supportsDetach: true,
   });
