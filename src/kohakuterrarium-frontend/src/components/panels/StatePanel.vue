@@ -95,18 +95,8 @@
                 </el-button>
               </template>
             </el-input>
-            <div class="flex items-center gap-1">
-              <button
-                v-for="m in ['auto', 'fts', 'semantic', 'hybrid']"
-                :key="m"
-                class="px-2 py-0.5 rounded text-[10px] transition-colors"
-                :class="memMode === m
-                  ? 'bg-iolite/10 text-iolite'
-                  : 'text-warm-400 hover:text-warm-600'"
-                @click="memMode = m"
-              >
-                {{ m }}
-              </button>
+            <div class="text-[9px] text-warm-400">
+              Full-text keyword search (FTS5)
             </div>
             <div
               v-if="memLoading"
@@ -277,15 +267,25 @@ async function deleteKey(key) {
 }
 
 // ── Tool History ──────────────────────────────────────────────
+// Tool calls live in msg.parts (type: "tool") for streaming messages,
+// or msg.tool_calls for history-replayed messages. Check both.
 const toolCalls = computed(() => {
   const tab = chat.activeTab;
   if (!tab) return [];
   const msgs = chat.messagesByTab?.[tab] || [];
   const out = [];
   for (const m of msgs) {
-    if (!m.tool_calls) continue;
-    for (const tc of m.tool_calls) {
-      if (tc?.name) out.push(tc);
+    // Streaming format: parts array with type="tool"
+    if (m.parts) {
+      for (const p of m.parts) {
+        if (p.type === "tool" && p.name) out.push(p);
+      }
+    }
+    // History format: tool_calls array
+    if (m.tool_calls) {
+      for (const tc of m.tool_calls) {
+        if (tc?.name) out.push(tc);
+      }
     }
   }
   // newest first
