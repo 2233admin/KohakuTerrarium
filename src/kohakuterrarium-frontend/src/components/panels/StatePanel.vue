@@ -339,10 +339,23 @@ const compactions = computed(() => {
   return msgs.filter((m) => m.role === "compact");
 });
 
-// Fetch once on mount and when agentId changes.
+// Fetch on mount and when agentId changes.
 watch(agentId, (id) => {
   if (id) scratchpad.fetch(id);
 }, { immediate: true });
+
+// Auto-refetch scratchpad when tool calls complete (tools are what
+// modify the scratchpad). Watch the message count as a trigger.
+watch(
+  () => {
+    const tab = chat.activeTab;
+    if (!tab) return 0;
+    return chat.messagesByTab?.[tab]?.length || 0;
+  },
+  () => {
+    if (agentId.value) scratchpad.fetch(agentId.value);
+  },
+);
 
 onMounted(() => {
   if (agentId.value) scratchpad.fetch(agentId.value);

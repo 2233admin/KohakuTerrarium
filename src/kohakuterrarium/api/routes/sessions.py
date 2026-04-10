@@ -270,23 +270,81 @@ async def search_session_memory(
         raise HTTPException(404, f"Session not found: {session_name}")
 
     try:
-        # Open the session store to get events for indexing.
-        store = SessionStore(path)
-        meta = store.load_meta()
-        agents = meta.get("agents", [])
+        # For running instances, use the live SessionStore from the manager
+        # so we read fresh data (including unflushed WAL cache). For saved
+        # sessions, open a read-only store from the file.
+        manager = get_manager()
+        live_store = None
+        for sid, session in manager._agents.items():
+            if hasattr(session, "agent") and hasattr(session.agent, "session_store"):
+                ss = session.agent.session_store
+                if ss and str(path) in str(getattr(ss, "_path", "")):
+                    live_store = ss
+                    break
 
-        memory = SessionMemory(str(path))
+        if live_store:
+            # Running instance — use the live store's built-in FTS directly.
+            # The store indexes text in FTS as events arrive (append_event).
+            live_store.flush()
+            raw_results = live_store.search(q, k=k)
+            results = [
+                {
+                    "content": r.get("meta", {}).get("event_key", ""),
+                    "round": 0,
+                    "block": 0,
+                    "agent": r.get("meta", {}).get("agent", ""),
+                    "block_type": r.get("meta", {}).get("type", ""),
+                    "score": r.get("score", 0),
+                    "ts": 0,
+                    "tool_name": "",
+                    "channel": "",
+                }
+                for r in raw_results
+            ]
+            # Enrich: fetch the actual text for each result
+            for res in results:
+                event_key = res["content"]
+                if event_key:
+                    try:
+                        evt = live_store.events[event_key]
+                        res["content"] = (
+                            evt.get("content")
+                            or evt.get("output")
+                            or evt.get("text")
+                            or str(evt)[:500]
+                        )
+                        res["ts"] = evt.get("ts", 0)
+                        res["block_type"] = evt.get("type", res["block_type"])
+                    except (KeyError, Exception):
+                        pass
+        else:
+            # Saved session — open store, use SessionMemory with indexing.
+            store = SessionStore(path)
+            meta = store.load_meta()
+            agents_list = meta.get("agents", [])
 
-        # Build/update the FTS index from session events before searching.
-        # This is idempotent — already-indexed events are skipped.
-        for agent_name in agents:
-            events = store.get_events(agent_name)
-            if events:
-                memory.index_events(agent_name, events)
+            memory = SessionMemory(str(path))
+            for agent_name in agents_list:
+                events = store.get_events(agent_name)
+                if events:
+                    memory.index_events(agent_name, events)
+            store.close(update_status=False)
 
-        store.close(update_status=False)
-
-        results = memory.search(query=q, mode=mode, k=k, agent=agent)
+            mem_results = memory.search(query=q, mode=mode, k=k, agent=agent)
+            results = [
+                {
+                    "content": r.content,
+                    "round": r.round_num,
+                    "block": r.block_num,
+                    "agent": r.agent,
+                    "block_type": r.block_type,
+                    "score": r.score,
+                    "ts": r.ts,
+                    "tool_name": r.tool_name,
+                    "channel": r.channel,
+                }
+                for r in mem_results
+            ]
     except Exception as e:
         raise HTTPException(500, f"Memory search failed: {e}")
 
@@ -296,18 +354,5 @@ async def search_session_memory(
         "mode": mode,
         "k": k,
         "count": len(results),
-        "results": [
-            {
-                "content": r.content,
-                "round": r.round_num,
-                "block": r.block_num,
-                "agent": r.agent,
-                "block_type": r.block_type,
-                "score": r.score,
-                "ts": r.ts,
-                "tool_name": r.tool_name,
-                "channel": r.channel,
-            }
-            for r in results
-        ],
+        "results": results,
     }
