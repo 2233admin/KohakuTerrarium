@@ -312,9 +312,7 @@ async def search_session_memory(
         except Exception:
             embedder = None
 
-        memory = SessionMemory(
-            str(path), embedder=embedder, store=store
-        )
+        memory = SessionMemory(str(path), embedder=embedder, store=store)
 
         # Index unindexed events (idempotent — skips already indexed)
         meta = store.load_meta()

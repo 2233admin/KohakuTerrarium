@@ -35,9 +35,7 @@ async def _watch_directory(root: str, websocket: WebSocket) -> None:
 
     root_path = Path(root)
     if not root_path.is_dir():
-        await websocket.send_json(
-            {"type": "error", "text": f"Not a directory: {root}"}
-        )
+        await websocket.send_json({"type": "error", "text": f"Not a directory: {root}"})
         return
 
     logger.info("File watcher awatch starting", root=root)
@@ -102,7 +100,9 @@ async def watch_files(websocket: WebSocket, agent_id: str):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logger.error("file watch WS crashed", error=str(e), root=str(root), exc_info=True)
+        logger.error(
+            "file watch WS crashed", error=str(e), root=str(root), exc_info=True
+        )
         try:
             await websocket.send_json({"type": "error", "text": str(e)})
             await websocket.close()

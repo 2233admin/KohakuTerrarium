@@ -91,10 +91,12 @@ async def _pty_session(websocket: WebSocket, cwd: str) -> None:
                     break
                 if not data:
                     break
-                await websocket.send_json({
-                    "type": "output",
-                    "data": data.decode("utf-8", errors="replace"),
-                })
+                await websocket.send_json(
+                    {
+                        "type": "output",
+                        "data": data.decode("utf-8", errors="replace"),
+                    }
+                )
         except asyncio.CancelledError:
             pass
 
@@ -161,10 +163,12 @@ async def _subprocess_session(websocket: WebSocket, cwd: str) -> None:
                 data = await proc.stdout.read(4096)
                 if not data:
                     break
-                await websocket.send_json({
-                    "type": "output",
-                    "data": data.decode("utf-8", errors="replace"),
-                })
+                await websocket.send_json(
+                    {
+                        "type": "output",
+                        "data": data.decode("utf-8", errors="replace"),
+                    }
+                )
         except asyncio.CancelledError:
             pass
 
@@ -206,7 +210,9 @@ async def terminal_ws(websocket: WebSocket, agent_id: str):
     manager = get_manager()
     session = manager._agents.get(agent_id)
     if not session:
-        await websocket.send_json({"type": "error", "data": f"Agent not found: {agent_id}"})
+        await websocket.send_json(
+            {"type": "error", "data": f"Agent not found: {agent_id}"}
+        )
         await websocket.close()
         return
 
