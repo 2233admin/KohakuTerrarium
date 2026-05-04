@@ -36,7 +36,7 @@ SEED_CHANNELS = {
 RESULT_CHANNELS = {
     "deep_research": "final",
     "auto_research": "feedback",
-    "swe_team": "feedback",
+    "swe_team": "results",  # 2026-04-29 fix: reviewer.can_send=[results,feedback,team_chat]; results is approved final, feedback is iteration loop
 }
 
 
